@@ -13,6 +13,19 @@ class TelegramHelper:
         self.default_chat_id = settings.telegram_chat_id
         self.base_url = f"https://api.telegram.org/bot{self.token}"
 
+    def send_message(self, text: str, chat_id: int):
+        """Gửi tin nhắn văn bản thông thường"""
+        payload = {
+            "chat_id": chat_id,
+            "text": text,
+            "parse_mode": "HTML"
+        }
+        try:
+            requests.post(f"{self.base_url}/sendMessage", json=payload)
+            return True
+        except:
+            return False
+
     def send_order_notification(self, text: str, order_id: str, chat_id: int):
         """Gửi thông báo đơn hàng mới kèm nút Xác nhận/Hủy"""
         keyboard = {

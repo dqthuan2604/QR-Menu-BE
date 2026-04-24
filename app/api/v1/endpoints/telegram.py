@@ -12,6 +12,6 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
     data = await request.json()
     
     # Xử lý trong background để tránh timeout Telegram
-    background_tasks.add_task(order_service.handle_telegram_callback, data)
+    background_tasks.add_task(order_service.handle_telegram_update, data)
     
     return {"status": "ok"}

@@ -67,14 +67,62 @@ class OrderService:
             status=order_data["status"],
             created_at=order_data["created_at"]
         )
-    def handle_telegram_callback(self, callback_data: dict):
+    def handle_telegram_update(self, callback_data: dict):
         """
-        Xử lý sự kiện khi người dùng nhấn nút trên Telegram.
+        Hệ thống điều phối (Dispatcher) cho các cập nhật từ Telegram Webhook.
+        Xử lý cả Callback Query (nút bấm) và Message (văn bản).
         """
-        query = callback_data.get("callback_query")
-        if not query:
-            return
+        # 1. Xử lý Callback Query (Nút bấm)
+        if "callback_query" in callback_data:
+            self._handle_callback_query(callback_data["callback_query"])
+            
+        # 2. Xử lý Message (Lệnh văn bản như /start)
+        elif "message" in callback_data:
+            self._handle_message(callback_data["message"])
+
+    def _handle_message(self, message: dict):
+        """Xử lý các tin nhắn văn bản từ người dùng"""
+        chat_id = message.get("chat", {}).get("id")
+        text = message.get("text", "")
         
+        if not chat_id or not text:
+            return
+
+        if text.startswith("/start"):
+            # Trích xuất tham số sau /start (ví dụ: /start store_123)
+            parts = text.split(" ")
+            param = parts[1] if len(parts) > 1 else ""
+            
+            if param:
+                # Tìm cửa hàng theo ID hoặc Bot Username
+                store = self.store_repo.get_store(param)
+                if not store:
+                    store = self.store_repo.find_by_bot_username(param)
+                
+                if store:
+                    store_id = store['id']
+                    self.store_repo.update_telegram_chat_id(store_id, chat_id)
+                    self.telegram.send_message(
+                        f"✅ <b>KẾT NỐI THÀNH CÔNG!</b>\n\n"
+                        f"🏪 Cửa hàng: <b>{store.get('name', store_id)}</b>\n"
+                        f"🔗 ID Hệ thống: <code>{store_id}</code>\n\n"
+                        f"🎉 Từ bây giờ, tôi sẽ tự động gửi thông báo đến đây mỗi khi:\n"
+                        f"• Có đơn hàng mới được tạo.\n"
+                        f"• Khách hàng thanh toán thành công.\n\n"
+                        f"<i>Bạn có thể quay lại Dashboard và nhấn nút 'Gửi thử' để kiểm tra lại đường truyền nhé!</i>", 
+                        chat_id
+                    )
+                else:
+                    self.telegram.send_message(f"❌ Không tìm thấy cửa hàng với mã hoặc tên: <code>{param}</code>", chat_id)
+            else:
+                self.telegram.send_message(
+                    "👋 <b>Chào mừng bạn đến với QR Menu Bot!</b>\n\n"
+                    "Để liên kết Bot với cửa hàng, vui lòng sử dụng mã QR trong Dashboard hoặc nhấn vào link liên kết từ trang quản trị.",
+                    chat_id
+                )
+
+    def _handle_callback_query(self, query: dict):
+        """Xử lý khi người dùng nhấn nút bấm"""
         callback_id = query["id"]
         data = query.get("data", "")
         message = query.get("message", {})
