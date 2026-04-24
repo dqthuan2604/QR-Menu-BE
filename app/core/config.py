@@ -1,7 +1,13 @@
-from pydantic_settings import BaseSettings
+import logging
 import os
+from pydantic_settings import BaseSettings
 
-print(f"DEBUG: Starting config loading. APP_ENV={os.getenv('APP_ENV')}")
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logging.info(f"DEBUG: Starting config loading. APP_ENV={os.getenv('APP_ENV')}")
 
 class Settings(BaseSettings):
     app_env: str = "development"
@@ -27,4 +33,4 @@ class Settings(BaseSettings):
     }
 
 settings = Settings()
-print(f"DEBUG: Config initialized. APP_ENV: {settings.app_env}")
+logging.info(f"DEBUG: Config initialized. APP_ENV: {settings.app_env}")
