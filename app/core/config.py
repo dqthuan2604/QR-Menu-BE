@@ -26,6 +26,5 @@ class Settings(BaseSettings):
         "extra": "allow"
     }
 
-print(f"DEBUG: Config initialized. Using env_file: {model_config['env_file']}")
-
 settings = Settings()
+print(f"DEBUG: Config initialized. APP_ENV: {settings.app_env}")
