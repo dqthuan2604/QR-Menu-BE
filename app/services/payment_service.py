@@ -3,29 +3,45 @@ import os
 from app.core.config import settings
 from app.utils.vietqr_helper import generate_vietqr_image_url, generate_vietqr_text
 from app.repositories.order_repo import OrderRepository
+from app.repositories.store_repo import store_repo
+from app.core.bank_constants import get_bank_bin
 from app.schemas.payment import PaymentCreateResponse, PaymentStatusResponse, PaymentCreateRequest
 from app.utils.telegram_helper import TelegramHelper
 
 class PaymentService:
-    """
-    Lớp điều hướng toàn bộ quy trình nghiệp vụ thanh toán.
-    Kết nối giữa API Router, Database (Repository) và các công cụ bên ngoài (VietQR, Telegram).
-    """
     def __init__(self):
         self.order_repo = OrderRepository()
+        self.store_repo = store_repo
         self.telegram = TelegramHelper()
 
     def create_payment(self, request: PaymentCreateRequest) -> PaymentCreateResponse:
         """
-        Khởi tạo luồng thanh toán:
-        1. Chuyển đổi dữ liệu từ Request sang dạng Dict để lưu vào Firestore.
-        2. Tạo bản ghi đơn hàng với trạng thái PENDING.
-        3. Tạo chuỗi ký tự VietQR và URL hình ảnh QR tương ứng.
+        Khởi tạo luồng thanh toán với cấu hình động từ Store Database
         """
-        # Trích xuất dữ liệu món ăn
-        items_data = [item.dict() for item in request.items] if request.items else []
+        # 1. Lấy cấu hình cửa hàng từ Firestore
+        store_config = self.store_repo.get_store(request.store_id)
         
-        # Lưu vào database thông qua Repository
+        # Nếu không có cấu hình trong DB, dùng mặc định từ .env (phục vụ quá trình chuyển đổi)
+        bank_bin = settings.bank_bin
+        bank_account = settings.bank_account
+        bank_account_name = settings.bank_account_name
+        
+        if store_config:
+            # Ưu tiên lấy từ DB
+            # Nếu store_config có bank_code (VCB, MB...), ta mapping sang BIN
+            db_bank_code = store_config.get("bank_code")
+            if db_bank_code:
+                mapped_bin = get_bank_bin(db_bank_code)
+                if mapped_bin:
+                    bank_bin = mapped_bin
+            
+            # Hoặc lấy trực tiếp bank_bin nếu đã có
+            bank_bin = store_config.get("bank_bin", bank_bin)
+            bank_account = store_config.get("bank_account", bank_account)
+            bank_account_name = store_config.get("bank_account_name", bank_account_name)
+
+        # 2. Tạo đơn hàng
+        items_data = [item.dict() for item in request.items] if request.items else []
         order = self.order_repo.create_order(
             amount=request.amount, 
             store_id=request.store_id, 
@@ -36,23 +52,20 @@ class PaymentService:
             items=items_data
         )
         
-        # Nội dung chuyển khoản theo cú pháp: CK [Mã đơn]
-        # Ví dụ: CK ORD_ABC123
         transfer_content = f"CK {order['id']}"
         
-        # Tạo URL hình ảnh QR (Sử dụng API của VietQR.io)
+        # 3. Tạo QR dựa trên thông tin thực của cửa hàng
         qr_image_url = generate_vietqr_image_url(
-            bank_bin=settings.bank_bin,
-            account_no=settings.bank_account,
+            bank_bin=bank_bin,
+            account_no=bank_account,
             amount=request.amount,
             content=transfer_content,
-            account_name=settings.bank_account_name
+            account_name=bank_account_name
         )
         
-        # Tạo chuỗi QR text (Dùng để Frontend tự generate QR nếu không muốn dùng ảnh URL)
         qr_data = generate_vietqr_text(
-            bank_bin=settings.bank_bin,
-            account_no=settings.bank_account,
+            bank_bin=bank_bin,
+            account_no=bank_account,
             amount=request.amount,
             content=transfer_content
         )
@@ -68,32 +81,71 @@ class PaymentService:
 
     def notify_paid(self, order_id: str):
         """
-        Xử lý khi khách báo đã chuyển tiền:
-        1. Kiểm tra đơn hàng có tồn tại không.
-        2. Cập nhật trạng thái 'Khách đã báo' (NOTIFIED).
-        3. Gửi tin nhắn Telegram kèm Link xác nhận cho chủ quán.
+        Gửi thông báo tới đúng Chat ID của chủ quán
         """
         order = self.order_repo.get_order(order_id)
         if not order:
             return False
             
-        # Ghi nhận thời điểm khách báo đã chuyển
         self.order_repo.update_status(order_id, "NOTIFIED", {"notified_at": datetime.now()})
         
-        # Gửi Telegram tương tác (Kèm nút bấm Xác nhận/Hủy ngay trong chat)
+        # Lấy Chat ID của cửa hàng từ DB
+        store_config = self.store_repo.get_store(order['store_id'])
+        chat_id = store_config.get("telegram_chat_id") if store_config else None
+        
         message = self.telegram.format_order_message(order)
-        self.telegram.send_interactive_message(message, order_id)
+        # Gửi tới chat_id của quán (nếu không có sẽ tự dùng mặc định trong .env)
+        self.telegram.send_interactive_message(message, order_id, chat_id=chat_id)
         
         return True
 
+    def handle_telegram_start(self, chat_id: int, text: str):
+        """
+        Xử lý lệnh /start {store_id} để tự động liên kết Bot
+        """
+        if text.startswith("/start "):
+            param = text.replace("/start ", "").strip()
+            if param:
+                # 1. Thử tìm theo ID trước
+                store = self.store_repo.get_store(param)
+                
+                # 2. Nếu không thấy ID, thử tìm theo Bot Username (name nhập từ FE)
+                if not store:
+                    store = self.store_repo.find_by_bot_username(param)
+                
+                if store:
+                    store_id = store['id']
+                    self.store_repo.update_telegram_chat_id(store_id, chat_id)
+                    self.telegram.send_message(
+                        f"✅ <b>KẾT NỐI THÀNH CÔNG!</b>\n\n"
+                        f"🏪 Cửa hàng: <b>{store.get('name', store_id)}</b>\n"
+                        f"🔗 ID Hệ thống: <code>{store_id}</code>\n\n"
+                        f"🎉 Từ bây giờ, tôi sẽ tự động gửi thông báo đến đây mỗi khi:\n"
+                        f"• Có đơn hàng mới được tạo.\n"
+                        f"• Khách hàng thanh toán thành công.\n\n"
+                        f"<i>Bạn có thể quay lại Dashboard và nhấn nút 'Gửi thử' để kiểm tra lại đường truyền nhé!</i>", 
+                        chat_id
+                    )
+                else:
+                    self.telegram.send_message(f"❌ Không tìm thấy cửa hàng với mã hoặc tên: <code>{param}</code>", chat_id)
+            else:
+                # Phản hồi khi nhấn /start mà không có tham số
+                self.telegram.send_message(
+                    "👋 <b>Chào mừng bạn đến với QR Menu Bot!</b>\n\n"
+                    "Để liên kết Bot với cửa hàng của bạn, vui lòng sử dụng mã QR trong Dashboard hoặc nhấn vào link liên kết từ trang quản trị.\n\n"
+                    "🚀 Bot này sẽ giúp bạn nhận thông báo đơn hàng mới tức thì!", 
+                    chat_id
+                )
+        elif text == "/start":
+             # Phản hồi cho lệnh /start thuần túy
+             self.telegram.send_message(
+                "👋 <b>Chào mừng bạn đến với QR Menu Bot!</b>\n\n"
+                "Tôi đã sẵn sàng! Hãy quét mã QR từ Dashboard để bắt đầu nhận thông báo nhé.", 
+                chat_id
+            )
+
     def confirm_paid(self, order_id: str, secret: str):
-        """
-        Xử lý khi chủ quán xác nhận đơn hàng:
-        1. Kiểm tra mã bí mật (Secret) để tránh người lạ tự ý xác nhận.
-        2. Kiểm tra trạng thái hiện tại (Tránh xác nhận trùng lặp).
-        3. Cập nhật trạng thái đơn hàng sang PAID.
-        """
-        expected_secret = os.getenv("ADMIN_CONFIRM_SECRET", "default_secret")
+        expected_secret = os.getenv("ADMIN_CONFIRM_SECRET", "admin123")
         if secret != expected_secret:
             return False, "Unauthorized"
             
@@ -101,19 +153,13 @@ class PaymentService:
         if not order:
             return False, "Order not found"
             
-        # Nếu đã thanh toán rồi thì không cần làm gì thêm
         if order['status'] == "PAID":
             return True, "Order already paid"
             
-        # Cập nhật trạng thái cuối cùng thành công
         self.order_repo.update_status(order_id, "PAID", {"confirmed_at": datetime.now()})
         return True, "Success"
 
     def get_payment_status(self, order_id: str) -> PaymentStatusResponse:
-        """
-        Truy vấn trạng thái đơn hàng để phản hồi cho Frontend.
-        Dùng cho cơ chế Polling ở Client.
-        """
         order = self.order_repo.get_order(order_id)
         if not order:
             return None

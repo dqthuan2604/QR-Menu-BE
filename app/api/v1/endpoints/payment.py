@@ -1,5 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from app.schemas.payment import PaymentCreateRequest, PaymentCreateResponse, PaymentStatusResponse
+from app.schemas.payment import (
+    PaymentCreateRequest, 
+    PaymentCreateResponse, 
+    PaymentStatusResponse,
+    StoreResponse,
+    StoreConfigRequest
+)
 from app.services.payment_service import PaymentService
 import logging
 
@@ -25,6 +31,46 @@ async def get_payment_status(order_id: str):
     if not status:
         raise HTTPException(status_code=404, detail="Order not found")
     return status
+
+# --- Store Management Endpoints ---
+
+@router.get("/store/{store_id}", response_model=StoreResponse)
+def get_store_config(store_id: str):
+    """
+    Lấy thông tin cấu hình của cửa hàng.
+    """
+    config = payment_service.store_repo.get_store(store_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Store not found")
+    
+    return StoreResponse(store_id=store_id, **config)
+
+@router.post("/store/{store_id}")
+def update_store_config(store_id: str, config: StoreConfigRequest):
+    """
+    Cập nhật thông tin ngân hàng cho cửa hàng.
+    """
+    payment_service.store_repo.update_bank_config(store_id, config.dict())
+    return {"status": "ok", "message": f"Updated config for {store_id}"}
+
+@router.post("/test-notification/{store_id}")
+async def test_notification(store_id: str):
+    """
+    Gửi tin nhắn thử nghiệm tới Telegram đã kết nối.
+    """
+    store = payment_service.store_repo.get_store(store_id)
+    if not store or not store.get("telegram_chat_id"):
+        raise HTTPException(status_code=400, detail="Store not connected to Telegram")
+    
+    payment_service.telegram.send_message(
+        f"🔔 <b>THÔNG BÁO THỬ NGHIỆM</b>\n\n"
+        f"Cửa hàng: <b>{store.get('name', store_id)}</b>\n"
+        f"Trạng thái: Kết nối hoạt động tốt! ✅\n\n"
+        f"Bạn sẽ nhận được thông báo tại đây khi có đơn hàng mới.",
+        store["telegram_chat_id"]
+    )
+    return {"status": "ok"}
+
 
 @router.post("/notify-paid")
 async def notify_paid(order_id: str = Query(...)):
@@ -57,7 +103,16 @@ async def telegram_webhook(request: Request):
     data = await request.json()
     print(f"📩 Incoming Telegram Webhook: {data}")
     
-    # Kiểm tra xem có phải là sự kiện nhấn nút (callback_query) hay không
+    # 1. Xử lý tin nhắn văn bản (Ví dụ: /start {store_id})
+    if "message" in data and "text" in data["message"]:
+        chat_id = data["message"]["chat"]["id"]
+        text = data["message"]["text"]
+        
+        if text.startswith("/start"):
+            payment_service.handle_telegram_start(chat_id, text)
+            return {"status": "ok"}
+
+    # 2. Xử lý nhấn nút (callback_query)
     if "callback_query" in data:
         callback = data["callback_query"]
         callback_id = callback["id"]

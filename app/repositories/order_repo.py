@@ -43,6 +43,29 @@ class OrderRepository:
         self.db.collection(self.collection).document(order_id).set(order_data)
         return order_data
 
+    def create_cod_order(self, store_id: str, customer_name: str, phone_number: str, address: str, order_info: str, items: list, total_amount: float):
+        """
+        Tạo mới một đơn hàng Cash On Delivery (COD).
+        """
+        order_id = f"COD_{uuid.uuid4().hex[:8].upper()}"
+        order_data = {
+            "id": order_id,
+            "store_id": store_id,
+            "customer_name": customer_name,
+            "phone_number": phone_number,
+            "address": address,
+            "order_info": order_info,
+            "items": items,
+            "total_amount": total_amount,
+            "payment_method": "COD",
+            "status": "PENDING",
+            "created_at": datetime.now()
+        }
+        
+        if self.db:
+            self.db.collection(self.collection).document(order_id).set(order_data)
+        return order_data
+
     def get_order(self, order_id: str):
         """
         Lấy thông tin chi tiết của một đơn hàng dựa trên ID.

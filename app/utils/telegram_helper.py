@@ -10,70 +10,77 @@ class TelegramHelper:
     """
     def __init__(self):
         self.token = settings.telegram_bot_token
-        self.chat_id = settings.telegram_chat_id
+        self.default_chat_id = settings.telegram_chat_id
         self.base_url = f"https://api.telegram.org/bot{self.token}"
 
-    def send_interactive_message(self, text: str, order_id: str):
-        """
-        Gửi tin nhắn kèm theo các nút bấm tương tác (Inline Keyboard).
-        """
-        if not self.token or not self.chat_id:
-            return False
-        
+    def send_order_notification(self, text: str, order_id: str, chat_id: int):
+        """Gửi thông báo đơn hàng mới kèm nút Xác nhận/Hủy"""
         keyboard = {
             "inline_keyboard": [
                 [
-                    {
-                        "text": "✅ Xác nhận đã nhận tiền",
-                        "callback_data": f"confirm_paid:{order_id}"
-                    },
-                    {
-                        "text": "❌ Hủy đơn",
-                        "callback_data": f"cancel_order:{order_id}"
-                    }
+                    {"text": "✅ Xác nhận", "callback_data": f"confirm_order:{order_id}"},
+                    {"text": "❌ Hủy", "callback_data": f"cancel_order:{order_id}"}
                 ]
             ]
         }
-        
         payload = {
-            "chat_id": self.chat_id,
+            "chat_id": chat_id,
             "text": text,
             "parse_mode": "HTML",
             "reply_markup": json.dumps(keyboard)
         }
-        
         try:
             requests.post(f"{self.base_url}/sendMessage", json=payload)
             return True
         except:
             return False
 
+    def edit_order_to_confirmed(self, chat_id: int, message_id: int, text: str, order_id: str):
+        """Cập nhật tin nhắn sang trạng thái đã xác nhận, hiển thị nút Hoàn thành/Hủy"""
+        keyboard = {
+            "inline_keyboard": [
+                [
+                    {"text": "🏁 Hoàn thành", "callback_data": f"complete_order:{order_id}"},
+                    {"text": "❌ Hủy", "callback_data": f"cancel_order:{order_id}"}
+                ]
+            ]
+        }
+        payload = {
+            "chat_id": chat_id,
+            "message_id": message_id,
+            "text": text,
+            "parse_mode": "HTML",
+            "reply_markup": json.dumps(keyboard)
+        }
+        try:
+            requests.post(f"{self.base_url}/editMessageText", json=payload)
+            return True
+        except:
+            return False
+
+    def edit_order_to_final_state(self, chat_id: int, message_id: int, text: str, status_text: str):
+        """Cập nhật tin nhắn sang trạng thái cuối cùng (Hủy/Hoàn thành), ẩn hết nút"""
+        final_text = f"{text}\n\n───────────────────\n{status_text}"
+        payload = {
+            "chat_id": chat_id,
+            "message_id": message_id,
+            "text": final_text,
+            "parse_mode": "HTML",
+            "reply_markup": json.dumps({"inline_keyboard": []})
+        }
+        try:
+            requests.post(f"{self.base_url}/editMessageText", json=payload)
+            return True
+        except:
+            return False
+
     def answer_callback_query(self, callback_query_id: str, text: str = None):
-        """
-        Phản hồi lại lệnh nhấn nút để dừng trạng thái loading trên Telegram.
-        """
         payload = {
             "callback_query_id": callback_query_id,
             "text": text
         }
         try:
             requests.post(f"{self.base_url}/answerCallbackQuery", json=payload)
-        except:
-            pass
-
-    def edit_message_text(self, chat_id: int, message_id: int, new_text: str):
-        """
-        Cập nhật lại nội dung tin nhắn và GỠ BỎ NÚT BẤM (để chống spam).
-        """
-        payload = {
-            "chat_id": chat_id,
-            "message_id": message_id,
-            "text": new_text,
-            "parse_mode": "HTML",
-            "reply_markup": json.dumps({"inline_keyboard": []}) # Gửi keyboard rỗng để xóa nút
-        }
-        try:
-            requests.post(f"{self.base_url}/editMessageText", json=payload)
         except:
             pass
 
