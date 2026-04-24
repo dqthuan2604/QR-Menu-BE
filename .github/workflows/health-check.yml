@@ -13,4 +13,4 @@ jobs:
     steps:
       - name: Ping QRMenu Server
         run: |
-          curl -f https://your-app-name.onrender.com/health || echo "Server might be down or sleeping"
+          curl -f https://qr-menu-be-46h0.onrender.com/health || echo "Server might be down or sleeping"
