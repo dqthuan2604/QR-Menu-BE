@@ -72,26 +72,35 @@ class OrderService:
         Hệ thống điều phối (Dispatcher) cho các cập nhật từ Telegram Webhook.
         Xử lý cả Callback Query (nút bấm) và Message (văn bản).
         """
+        print(f"DEBUG: Processing telegram update: {callback_data}")
         # 1. Xử lý Callback Query (Nút bấm)
         if "callback_query" in callback_data:
+            print("DEBUG: Detected callback_query")
             self._handle_callback_query(callback_data["callback_query"])
             
         # 2. Xử lý Message (Lệnh văn bản như /start)
         elif "message" in callback_data:
+            print("DEBUG: Detected message")
             self._handle_message(callback_data["message"])
+        else:
+            print("DEBUG: No supported update type found in data")
 
     def _handle_message(self, message: dict):
         """Xử lý các tin nhắn văn bản từ người dùng"""
         chat_id = message.get("chat", {}).get("id")
         text = message.get("text", "")
+        print(f"DEBUG: Handling message from {chat_id}: {text}")
         
         if not chat_id or not text:
+            print("DEBUG: Missing chat_id or text")
             return
 
         if text.startswith("/start"):
+            print("DEBUG: Start command detected")
             # Trích xuất tham số sau /start (ví dụ: /start store_123)
             parts = text.split(" ")
             param = parts[1] if len(parts) > 1 else ""
+            print(f"DEBUG: Start param: {param}")
             
             if param:
                 # Tìm cửa hàng theo ID hoặc Bot Username

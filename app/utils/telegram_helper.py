@@ -12,6 +12,7 @@ class TelegramHelper:
         self.token = settings.telegram_bot_token
         self.default_chat_id = settings.telegram_chat_id
         self.base_url = f"https://api.telegram.org/bot{self.token}"
+        print(f"DEBUG: TelegramHelper initialized with token: {self.token[:10]}... (len: {len(self.token)})")
 
     def send_message(self, text: str, chat_id: int):
         """Gửi tin nhắn văn bản thông thường"""
@@ -20,10 +21,13 @@ class TelegramHelper:
             "text": text,
             "parse_mode": "HTML"
         }
+        print(f"DEBUG: Sending message to {chat_id}: {text[:50]}...")
         try:
-            requests.post(f"{self.base_url}/sendMessage", json=payload)
+            resp = requests.post(f"{self.base_url}/sendMessage", json=payload)
+            print(f"DEBUG: Telegram sendMessage response: {resp.status_code} - {resp.text}")
             return True
-        except:
+        except Exception as e:
+            print(f"DEBUG: Telegram sendMessage error: {e}")
             return False
 
     def send_order_notification(self, text: str, order_id: str, chat_id: int):

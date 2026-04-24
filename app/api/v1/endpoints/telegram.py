@@ -10,6 +10,7 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
     Endpoint nhận webhook từ Telegram khi người dùng tương tác với Bot.
     """
     data = await request.json()
+    print(f"DEBUG: Received Telegram webhook: {data}")
     
     # Xử lý trong background để tránh timeout Telegram
     background_tasks.add_task(order_service.handle_telegram_update, data)

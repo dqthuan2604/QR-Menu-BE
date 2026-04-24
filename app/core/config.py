@@ -1,4 +1,7 @@
 from pydantic_settings import BaseSettings
+import os
+
+print(f"DEBUG: Starting config loading. APP_ENV={os.getenv('APP_ENV')}")
 
 class Settings(BaseSettings):
     app_env: str = "development"
@@ -18,8 +21,11 @@ class Settings(BaseSettings):
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
     
-    class Config:
-        env_file = ".env"
-        extra = "allow" # Cho phép các biến khác trong .env mà không báo lỗi
+    model_config = {
+        "env_file": ".env.prod" if os.getenv("APP_ENV") == "production" else ".env",
+        "extra": "allow"
+    }
+
+print(f"DEBUG: Config initialized. Using env_file: {model_config['env_file']}")
 
 settings = Settings()
