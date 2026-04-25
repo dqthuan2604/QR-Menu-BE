@@ -72,7 +72,7 @@ async def test_notification(store_id: str):
     return {"status": "ok"}
 
 
-@router.post("/notify-paid")
+@router.api_route("/notify-paid", methods=["GET", "POST"])
 async def notify_paid(order_id: str = Query(...)):
     """
     [KHÁCH HÀNG] Bước 3: Khách hàng xác nhận đã chuyển khoản xong.
@@ -101,12 +101,12 @@ async def telegram_webhook(request: Request):
     Đây là trung tâm xử lý cho Phase 3.
     """
     data = await request.json()
-    print(f"📩 Incoming Telegram Webhook: {data}")
     
     # 1. Xử lý tin nhắn văn bản (Ví dụ: /start {store_id})
     if "message" in data and "text" in data["message"]:
         chat_id = data["message"]["chat"]["id"]
         text = data["message"]["text"]
+        print(f"📩 Telegram Message from {chat_id}: {text}")
         
         if text.startswith("/start"):
             payment_service.handle_telegram_start(chat_id, text)
@@ -121,17 +121,26 @@ async def telegram_webhook(request: Request):
         message_id = callback["message"]["message_id"]
         original_text = callback["message"]["text"]
         
-        print(f"🔘 Button Clicked: {callback_data} by ChatID: {chat_id}")
-        
         # 1. Phản hồi ngay lập tức để dừng quay vòng loading trên Telegram
         payment_service.telegram.answer_callback_query(callback_id, "Đang xử lý...")
         
         # Tách Action và Order ID
+        if ":" not in callback_data:
+            return {"status": "ok"}
+            
         action, order_id = callback_data.split(":")
+        
+        # Lấy thông tin khách hàng để log
+        order = payment_service.order_repo.get_order(order_id)
+        customer_name = order.get("customer_name", "N/A") if order else "N/A"
+        address = order.get("address", "N/A") if order else "N/A"
+        phone = order.get("phone_number", "N/A") if order else "N/A"
+        
+        print(f"🔘 Telegram Button: {action} | Order: {order_id} | Customer: {customer_name} | Phone: {phone} | Address: {address} | by ChatID: {chat_id}")
         
         if action == "confirm_paid":
             import os
-            secret = os.getenv("ADMIN_CONFIRM_SECRET", "default_secret")
+            secret = os.getenv("ADMIN_CONFIRM_SECRET", "admin123")
             success, msg = payment_service.confirm_paid(order_id, secret)
             
             if success:

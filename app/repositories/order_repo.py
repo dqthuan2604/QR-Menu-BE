@@ -13,16 +13,15 @@ class OrderRepository:
         # Tên Collection trong Firestore
         self.collection = "orders" if self.db else None
 
-    def create_order(self, amount: int, store_id: str, order_info: str, address: str = None, phone_number: str = None, customer_name: str = None, items: list = None):
+    def create_order(self, amount: int, store_id: str, order_info: str, address: str = None, phone_number: str = None, customer_name: str = None, items: list = None, payment_method: str = "BANK", currency: str = "VND"):
         """
         Tạo mới một tài liệu (document) đơn hàng trong Firestore.
-        - order_id: Tự động sinh ID ngắn gọn (Ví dụ: ORD_A1B2C3D4).
-        - expired_at: Đơn hàng mặc định hết hạn sau 15 phút.
         """
         order_id = f"ORD_{uuid.uuid4().hex[:8].upper()}"
         order_data = {
             "id": order_id,
             "amount": amount,
+            "currency": currency,
             "status": "PENDING",
             "store_id": store_id,
             "order_info": order_info,
@@ -30,8 +29,10 @@ class OrderRepository:
             "phone_number": phone_number,
             "customer_name": customer_name,
             "items": items or [],
+            "payment_method": payment_method,
             "created_at": datetime.now(),
-            "expired_at": datetime.now() + timedelta(minutes=15)
+            "expired_at": datetime.now() + timedelta(minutes=15),
+            "telegram_message_id": None
         }
 
         if not self.db:
@@ -43,7 +44,7 @@ class OrderRepository:
         self.db.collection(self.collection).document(order_id).set(order_data)
         return order_data
 
-    def create_cod_order(self, store_id: str, customer_name: str, phone_number: str, address: str, order_info: str, items: list, total_amount: float):
+    def create_cod_order(self, store_id: str, customer_name: str, phone_number: str, address: str, order_info: str, items: list, total_amount: float, currency: str = "VND"):
         """
         Tạo mới một đơn hàng Cash On Delivery (COD).
         """
@@ -57,9 +58,11 @@ class OrderRepository:
             "order_info": order_info,
             "items": items,
             "total_amount": total_amount,
+            "currency": currency,
             "payment_method": "COD",
             "status": "PENDING",
-            "created_at": datetime.now()
+            "created_at": datetime.now(),
+            "telegram_message_id": None
         }
         
         if self.db:

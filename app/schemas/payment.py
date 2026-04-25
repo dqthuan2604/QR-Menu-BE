@@ -17,6 +17,7 @@ class PaymentCreateRequest(BaseModel):
     phone_number: Optional[str] = None
     address: Optional[str] = None
     items: Optional[List[OrderItem]] = []
+    currency: Optional[str] = "VND"
 
 class PaymentCreateResponse(BaseModel):
     order_id: str

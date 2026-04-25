@@ -16,28 +16,29 @@ class TelegramHelper:
         logging.info(f"DEBUG: TelegramHelper initialized with token: {str(self.token)[:10]}... (len: {len(str(self.token))})")
 
     def send_message(self, text: str, chat_id: int):
-        """Gửi tin nhắn văn bản thông thường"""
+        """Gửi tin nhắn văn bản thông thường. Trả về message_id nếu thành công."""
         payload = {
             "chat_id": chat_id,
             "text": text,
             "parse_mode": "HTML"
         }
-        logging.info(f"DEBUG: Sending message to {chat_id}: {text[:50]}...")
         try:
             resp = requests.post(f"{self.base_url}/sendMessage", json=payload)
-            logging.info(f"DEBUG: Telegram sendMessage response: {resp.status_code} - {resp.text}")
-            return True
+            if resp.status_code == 200:
+                data = resp.json()
+                return data.get("result", {}).get("message_id")
+            return None
         except Exception as e:
             logging.error(f"DEBUG: Telegram sendMessage error: {e}")
-            return False
+            return None
 
-    def send_order_notification(self, text: str, order_id: str, chat_id: int):
-        """Gửi thông báo đơn hàng mới kèm nút Xác nhận/Hủy"""
+    def send_cod_notification(self, text: str, order_id: str, chat_id: int):
+        """Gửi thông báo đơn hàng COD kèm nút Xác nhận đơn hàng"""
         keyboard = {
             "inline_keyboard": [
                 [
-                    {"text": "✅ Xác nhận", "callback_data": f"confirm_order:{order_id}"},
-                    {"text": "❌ Hủy", "callback_data": f"cancel_order:{order_id}"}
+                    {"text": "✅ Xác nhận đơn", "callback_data": f"confirm_order:{order_id}"},
+                    {"text": "❌ Hủy đơn", "callback_data": f"cancel_order:{order_id}"}
                 ]
             ]
         }
@@ -45,52 +46,78 @@ class TelegramHelper:
             "chat_id": chat_id,
             "text": text,
             "parse_mode": "HTML",
-            "reply_markup": json.dumps(keyboard)
+            "reply_markup": keyboard
         }
         try:
-            requests.post(f"{self.base_url}/sendMessage", json=payload)
-            return True
+            resp = requests.post(f"{self.base_url}/sendMessage", json=payload)
+            if resp.status_code == 200:
+                return resp.json().get("result", {}).get("message_id")
+            return None
         except:
-            return False
+            return None
 
-    def edit_order_to_confirmed(self, chat_id: int, message_id: int, text: str, order_id: str):
-        """Cập nhật tin nhắn sang trạng thái đã xác nhận, hiển thị nút Hoàn thành/Hủy"""
+    def send_bank_notification(self, text: str, order_id: str, chat_id: int):
+        """Gửi thông báo đơn hàng BANK kèm nút Xác nhận đã nhận tiền"""
         keyboard = {
             "inline_keyboard": [
                 [
-                    {"text": "🏁 Hoàn thành", "callback_data": f"complete_order:{order_id}"},
-                    {"text": "❌ Hủy", "callback_data": f"cancel_order:{order_id}"}
+                    {"text": "💰 Đã nhận tiền", "callback_data": f"confirm_paid:{order_id}"},
+                    {"text": "❌ Hủy đơn", "callback_data": f"cancel_order:{order_id}"}
                 ]
             ]
         }
         payload = {
             "chat_id": chat_id,
-            "message_id": message_id,
             "text": text,
             "parse_mode": "HTML",
-            "reply_markup": json.dumps(keyboard)
+            "reply_markup": keyboard
         }
         try:
-            requests.post(f"{self.base_url}/editMessageText", json=payload)
-            return True
+            resp = requests.post(f"{self.base_url}/sendMessage", json=payload)
+            if resp.status_code == 200:
+                return resp.json().get("result", {}).get("message_id")
+            return None
         except:
-            return False
+            return None
 
-    def edit_order_to_final_state(self, chat_id: int, message_id: int, text: str, status_text: str):
-        """Cập nhật tin nhắn sang trạng thái cuối cùng (Hủy/Hoàn thành), ẩn hết nút"""
-        final_text = f"{text}\n\n───────────────────\n{status_text}"
+    def send_interactive_message(self, text: str, order_id: str, chat_id: int):
+        """Mặc định coi là Bank notification nếu gọi hàm chung này"""
+        return self.send_bank_notification(text, order_id, chat_id)
+
+    def edit_message_text(self, chat_id: int, message_id: int, text: str, reply_markup: dict = None):
+        """Cập nhật nội dung tin nhắn Telegram."""
         payload = {
             "chat_id": chat_id,
             "message_id": message_id,
-            "text": final_text,
-            "parse_mode": "HTML",
-            "reply_markup": json.dumps({"inline_keyboard": []})
+            "text": text,
+            "parse_mode": "HTML"
         }
+        if reply_markup is not None:
+            payload["reply_markup"] = reply_markup
+        else:
+            # Nếu muốn xóa bàn phím cũ, gửi inline_keyboard rỗng
+            payload["reply_markup"] = {"inline_keyboard": []}
+
         try:
-            requests.post(f"{self.base_url}/editMessageText", json=payload)
-            return True
-        except:
+            resp = requests.post(f"{self.base_url}/editMessageText", json=payload)
+            if resp.status_code != 200:
+                logging.error(f"DEBUG: Telegram editMessageText failed: {resp.text}")
+            return resp.status_code == 200
+        except Exception as e:
+            logging.error(f"DEBUG: Telegram editMessageText error: {e}")
             return False
+
+    def edit_bank_notification(self, chat_id: int, message_id: int, text: str, order_id: str):
+        """Cập nhật tin nhắn BANK và hiển thị nút Xác nhận đã nhận tiền"""
+        keyboard = {
+            "inline_keyboard": [
+                [
+                    {"text": "💰 Đã nhận tiền", "callback_data": f"confirm_paid:{order_id}"},
+                    {"text": "❌ Hủy đơn", "callback_data": f"cancel_order:{order_id}"}
+                ]
+            ]
+        }
+        return self.edit_message_text(chat_id, message_id, text, reply_markup=keyboard)
 
     def answer_callback_query(self, callback_query_id: str, text: str = None):
         payload = {
@@ -102,27 +129,83 @@ class TelegramHelper:
         except:
             pass
 
-    def format_order_message(self, order_data: dict):
+    def format_currency(self, amount: float, currency_code: str = "VND"):
+        """Định dạng tiền tệ theo mã (VND, USD, EUR)"""
+        if currency_code == "VND":
+            # 2.000đ
+            return f"{amount:,.0f}".replace(",", ".") + "đ"
+        elif currency_code == "USD":
+            # $2,000.00
+            return f"${amount:,.2f}"
+        elif currency_code == "EUR":
+            # 2.000,00 €
+            formatted = f"{amount:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+            return f"{formatted} €"
+        else:
+            return f"{amount:,.2f} {currency_code}"
+
+    def format_cod_message(self, order_data: dict):
+        """Định dạng tin nhắn cho đơn hàng thanh toán khi nhận hàng (COD)"""
+        currency = order_data.get("currency", "VND")
         items_str = ""
         for item in order_data.get("items", []):
-            items_str += f"• {item['name']} x {item['quantity']}: {item['price']:,}đ\n"
+            price_formatted = self.format_currency(item['price'], currency)
+            total_item_price = self.format_currency(item['price'] * item['quantity'], currency)
+            items_str += f"• {item['name']} x {item['quantity']}: {total_item_price}\n"
         
         customer_name = order_data.get('customer_name', 'Khách vãng lai')
         phone = order_data.get('phone_number', 'N/A')
         address = order_data.get('address', 'N/A')
+        total_amount = order_data.get('total_amount', order_data.get('amount', 0))
+        total_formatted = self.format_currency(total_amount, currency)
         
         message = (
-            f"🔔 <b>CÓ ĐƠN HÀNG MỚI (DELIVERY)</b>\n\n"
+            f"🔔 <b>🚚 ĐƠN HÀNG COD MỚI</b>\n\n"
             f"👤 <b>Khách:</b> {customer_name}\n"
-            f"📞 <b>SĐT:</b> {phone}\n"
+            f"📞 <b>SĐT:</b> <code>{phone}</code>\n"
             f"📍 <b>Địa chỉ:</b> {address}\n"
+            f"---------------------------\n"
+            f"💳 <b>Thanh toán:</b> Tiền mặt (COD)\n"
             f"---------------------------\n"
             f"📝 <b>Chi tiết món:</b>\n"
             f"{items_str or '• Không có thông tin món'}\n"
             f"---------------------------\n"
-            f"💰 <b>TỔNG CỘNG: {order_data['amount']:,} VND</b>\n"
-            f"📝 ND chuyển khoản: <code>CK {order_data['id']}</code>\n"
+            f"💰 <b>TỔNG CỘNG: {total_formatted}</b>\n"
             f"---------------------------\n"
-            f"<i>Vui lòng kiểm tra tài khoản trước khi xác nhận.</i>"
+            f"<i>Vui lòng chuẩn bị món và liên hệ khách để giao hàng.</i>"
+        )
+        return message
+
+    def format_bank_transfer_message(self, order_data: dict):
+        """Định dạng tin nhắn cho đơn hàng chuyển khoản (VietQR)"""
+        currency = order_data.get("currency", "VND")
+        items_str = ""
+        for item in order_data.get("items", []):
+            price_formatted = self.format_currency(item['price'], currency)
+            total_item_price = self.format_currency(item['price'] * item['quantity'], currency)
+            items_str += f"• {item['name']} x {item['quantity']}: {total_item_price}\n"
+        
+        customer_name = order_data.get('customer_name', 'Khách vãng lai')
+        phone = order_data.get('phone_number', 'N/A')
+        address = order_data.get('address', 'N/A')
+        total_amount = order_data.get('amount', order_data.get('total_amount', 0))
+        total_formatted = self.format_currency(total_amount, currency)
+        
+        message = (
+            f"🔔 <b>💰 KHÁCH BÁO CHUYỂN KHOẢN</b>\n\n"
+            f"👤 <b>Khách:</b> {customer_name}\n"
+            f"📞 <b>SĐT:</b> <code>{phone}</code>\n"
+            f"📍 <b>Địa chỉ:</b> {address}\n"
+            f"---------------------------\n"
+            f"💳 <b>Thanh toán:</b> Chuyển khoản (VietQR)\n"
+            f"---------------------------\n"
+            f"📝 <b>Chi tiết món:</b>\n"
+            f"{items_str or '• Không có thông tin món'}\n"
+            f"---------------------------\n"
+            f"💰 <b>TỔNG CỘNG: {total_formatted}</b>\n"
+            f"📝 Nội dung CK: <code>CK {order_data.get('id', 'N/A')}</code>\n"
+            f"---------------------------\n"
+            f"⚠️ <b>LƯU Ý QUAN TRỌNG:</b>\n"
+            f"<i>Vui lòng kiểm tra tài khoản ngân hàng của bạn để xác nhận tiền đã về trước khi nhấn nút 'Xác nhận'.</i>"
         )
         return message

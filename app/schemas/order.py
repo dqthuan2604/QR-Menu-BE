@@ -18,6 +18,7 @@ class OrderCreateRequest(BaseModel):
     order_info: Optional[str] = None
     items: List[OrderItemSchema]
     total_amount: float
+    currency: Optional[str] = "VND"
     payment_method: Literal["COD"]
 
 class OrderResponse(BaseModel):

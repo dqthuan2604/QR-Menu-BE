@@ -12,7 +12,14 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
     """
     try:
         data = await request.json()
-        logging.info(f"DEBUG: Received Telegram webhook data: {data}")
+        # Tối ưu log: Chỉ log tóm tắt thay vì log toàn bộ JSON thô
+        if "callback_query" in data:
+            cb = data["callback_query"]
+            logging.info(f"🔘 Telegram Callback: {cb.get('data')} from {cb.get('from', {}).get('id')}")
+        elif "message" in data:
+            msg = data["message"]
+            logging.info(f"📩 Telegram Message from {msg.get('from', {}).get('id')}: {msg.get('text', '')[:20]}...")
+        
         # Xử lý trong background để tránh timeout Telegram
         background_tasks.add_task(order_service.handle_telegram_update, data)
     except Exception as e:

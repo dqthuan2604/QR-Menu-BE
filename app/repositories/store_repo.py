@@ -35,4 +35,12 @@ class StoreRepository:
         """Cập nhật cấu hình ngân hàng (dùng cho trang Admin)"""
         self.db.collection(self.collection).document(store_id).set(bank_config, merge=True)
 
+    def get_owner_bank_config(self, owner_id: str) -> Optional[Dict[str, Any]]:
+        """Lấy cấu hình ngân hàng từ profile của chủ quán"""
+        doc = self.db.collection("users").document(owner_id).get()
+        if doc.exists:
+            data = doc.to_dict()
+            return data.get("bank_config")
+        return None
+
 store_repo = StoreRepository()

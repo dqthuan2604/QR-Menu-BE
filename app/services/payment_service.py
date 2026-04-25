@@ -27,18 +27,26 @@ class PaymentService:
         bank_account_name = settings.bank_account_name
         
         if store_config:
-            # Ưu tiên lấy từ DB
-            # Nếu store_config có bank_code (VCB, MB...), ta mapping sang BIN
+            # Ưu tiên lấy từ DB của Store
             db_bank_code = store_config.get("bank_code")
+            bank_bin = store_config.get("bank_bin", bank_bin)
+            bank_account = store_config.get("bank_account", bank_account)
+            bank_account_name = store_config.get("bank_account_name", bank_account_name)
+            
+            # Nếu vẫn thiếu thông tin ngân hàng, thử lấy từ profile của chủ quán
+            if not db_bank_code or not bank_account:
+                owner_id = store_config.get("ownerId") # Firestore field is ownerId
+                if owner_id:
+                    owner_bank = self.store_repo.get_owner_bank_config(owner_id)
+                    if owner_bank:
+                        db_bank_code = owner_bank.get("bank_code", db_bank_code)
+                        bank_account = owner_bank.get("bank_account", bank_account)
+                        bank_account_name = owner_bank.get("bank_account_name", bank_account_name)
+
             if db_bank_code:
                 mapped_bin = get_bank_bin(db_bank_code)
                 if mapped_bin:
                     bank_bin = mapped_bin
-            
-            # Hoặc lấy trực tiếp bank_bin nếu đã có
-            bank_bin = store_config.get("bank_bin", bank_bin)
-            bank_account = store_config.get("bank_account", bank_account)
-            bank_account_name = store_config.get("bank_account_name", bank_account_name)
 
         # 2. Tạo đơn hàng
         items_data = [item.dict() for item in request.items] if request.items else []
@@ -49,7 +57,8 @@ class PaymentService:
             address=request.address,
             phone_number=request.phone_number,
             customer_name=request.customer_name,
-            items=items_data
+            items=items_data,
+            currency=request.currency
         )
         
         transfer_content = f"CK {order['id']}"
@@ -70,6 +79,18 @@ class PaymentService:
             content=transfer_content
         )
         
+        # 3. Gửi thông báo "Đơn đang chờ thanh toán" cho Admin ngay lập tức
+        store_config = self.store_repo.get_store(request.store_id)
+        if store_config and store_config.get("telegram_chat_id"):
+            chat_id = store_config["telegram_chat_id"]
+            # Tạo message với trạng thái "ĐANG CHỜ"
+            wait_message = self.telegram.format_bank_transfer_message(order)
+            wait_message = wait_message.replace("🔔 💰 <b>KHÁCH BÁO CHUYỂN KHOẢN</b>", "⏳ <b>ĐƠN ĐANG CHỜ THANH TOÁN</b>")
+            # Gửi tin nhắn thông báo và lưu ID
+            msg_id = self.telegram.send_message(wait_message, chat_id)
+            if msg_id:
+                self.order_repo.update_status(order['id'], "PENDING", {"telegram_message_id": msg_id})
+
         return PaymentCreateResponse(
             order_id=order['id'],
             qr_data=qr_data,
@@ -81,7 +102,7 @@ class PaymentService:
 
     def notify_paid(self, order_id: str):
         """
-        Gửi thông báo tới đúng Chat ID của chủ quán
+        Gửi thông báo hoặc Cập nhật tin nhắn tới chủ quán khi khách báo đã chuyển tiền
         """
         order = self.order_repo.get_order(order_id)
         if not order:
@@ -93,9 +114,18 @@ class PaymentService:
         store_config = self.store_repo.get_store(order['store_id'])
         chat_id = store_config.get("telegram_chat_id") if store_config else None
         
-        message = self.telegram.format_order_message(order)
-        # Gửi tới chat_id của quán (nếu không có sẽ tự dùng mặc định trong .env)
-        self.telegram.send_interactive_message(message, order_id, chat_id=chat_id)
+        if not chat_id:
+            return False
+
+        message = self.telegram.format_bank_transfer_message(order)
+        msg_id = order.get("telegram_message_id")
+
+        if msg_id:
+            # Edit tin nhắn cũ thành "KHÁCH BÁO CHUYỂN KHOẢN" và hiện nút xác nhận
+            self.telegram.edit_bank_notification(chat_id, msg_id, message, order_id)
+        else:
+            # Nếu chưa có msg_id thì gửi mới (fallback)
+            self.telegram.send_bank_notification(message, order_id, chat_id=chat_id)
         
         return True
 

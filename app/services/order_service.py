@@ -21,7 +21,8 @@ class OrderService:
             address=request.address,
             order_info=request.order_info or "",
             items=items_dict,
-            total_amount=request.total_amount
+            total_amount=request.total_amount,
+            currency=request.currency
         )
         
         # 2. Lấy thông tin cửa hàng để lấy telegram_chat_id
@@ -31,29 +32,13 @@ class OrderService:
         if store_config and store_config.get("telegram_chat_id"):
             chat_id = store_config["telegram_chat_id"]
             
-            # Format danh sách món ăn
-            items_text = ""
-            for item in request.items:
-                note_str = f" <i>(Ghi chú: {item.note})</i>" if item.note else ""
-                items_text += f"▪️ <b>{item.name}</b>{note_str}\n   └─ {item.quantity} x {item.price:,.0f}đ = <b>{item.price * item.quantity:,.0f}đ</b>\n"
-                
-            telegram_msg = (
-                f"🛍 <b>ĐƠN HÀNG MỚI #{order_data['id'][:8].upper()}</b>\n"
-                f"───────────────────\n"
-                f"👤 <b>Khách:</b> {request.customer_name}\n"
-                f"📞 <b>SĐT:</b> <code>{request.phone_number}</code>\n"
-                f"📍 <b>Địa chỉ:</b> {request.address}\n"
-                f"📝 <b>Ghi chú:</b> {request.order_info or 'Không có'}\n"
-                f"───────────────────\n"
-                f"<b>📋 DANH SÁCH MÓN:</b>\n"
-                f"{items_text}\n"
-                f"💰 <b>TỔNG CỘNG: {request.total_amount:,.0f}đ</b>\n"
-                f"───────────────────\n"
-                f"<i>Vui lòng xử lý đơn hàng sớm!</i>"
-            )
+            # Sử dụng hàm định dạng chuyên biệt cho COD
+            telegram_msg = self.telegram.format_cod_message(order_data)
             
-            # Gọi API Telegram gửi tin nhắn tương tác
-            self.telegram.send_order_notification(telegram_msg, order_data['id'], chat_id)
+            # Gọi API Telegram gửi tin nhắn tương tác cho đơn COD
+            msg_id = self.telegram.send_cod_notification(telegram_msg, order_data['id'], chat_id)
+            if msg_id:
+                self.order_repo.update_status(order_data['id'], "PENDING", {"telegram_message_id": msg_id})
             
         return OrderResponse(
             order_id=order_data["id"],
@@ -73,7 +58,6 @@ class OrderService:
         Hệ thống điều phối (Dispatcher) cho các cập nhật từ Telegram Webhook.
         Xử lý cả Callback Query (nút bấm) và Message (văn bản).
         """
-        logging.info(f"DEBUG: Processing telegram update: {callback_data}")
         # 1. Xử lý Callback Query (Nút bấm)
         if "callback_query" in callback_data:
             logging.info("DEBUG: Detected callback_query")
@@ -160,15 +144,24 @@ class OrderService:
         # 2. Xử lý các hành động
         if action == "confirm_order":
             self.order_repo.update_status(order_id, "CONFIRMED")
-            self.telegram.edit_order_to_confirmed(chat_id, message_id, original_text, order_id)
+            new_text = f"{original_text}\n\n✅ <b>TRẠNG THÁI: ĐÃ XÁC NHẬN ĐƠN</b>"
+            self.telegram.edit_message_text(chat_id, message_id, new_text)
             self.telegram.answer_callback_query(callback_id, "✅ Đã xác nhận đơn hàng!")
+            
+        elif action == "confirm_paid":
+            self.order_repo.update_status(order_id, "PAID")
+            new_text = f"{original_text}\n\n✅ <b>TRẠNG THÁI: ĐÃ NHẬN TIỀN</b>"
+            self.telegram.edit_message_text(chat_id, message_id, new_text)
+            self.telegram.answer_callback_query(callback_id, "💰 Đã xác nhận nhận tiền!")
             
         elif action == "cancel_order":
             self.order_repo.update_status(order_id, "CANCELLED")
-            self.telegram.edit_order_to_final_state(chat_id, message_id, original_text, "❌ <b>ĐƠN HÀNG ĐÃ BỊ HỦY</b>")
+            new_text = f"{original_text}\n\n❌ <b>TRẠNG THÁI: ĐÃ HỦY ĐƠN</b>"
+            self.telegram.edit_message_text(chat_id, message_id, new_text)
             self.telegram.answer_callback_query(callback_id, "🚫 Đã hủy đơn hàng!")
             
         elif action == "complete_order":
             self.order_repo.update_status(order_id, "COMPLETED")
-            self.telegram.edit_order_to_final_state(chat_id, message_id, original_text, "✅ <b>ĐƠN HÀNG ĐÃ HOÀN THÀNH</b>")
+            new_text = f"{original_text}\n\n✅ <b>TRẠNG THÁI: ĐÃ HOÀN THÀNH</b>"
+            self.telegram.edit_message_text(chat_id, message_id, new_text)
             self.telegram.answer_callback_query(callback_id, "🎉 Chúc mừng bạn đã hoàn thành đơn!")
