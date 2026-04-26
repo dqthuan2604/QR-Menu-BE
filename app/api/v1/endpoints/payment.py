@@ -82,6 +82,16 @@ async def notify_paid(order_id: str = Query(...)):
         raise HTTPException(status_code=404, detail="Order not found")
     return {"message": "Notification sent to admin"}
 
+@router.post("/cancel")
+async def cancel_order(order_id: str = Query(...)):
+    """
+    [KHÁCH HÀNG] Chủ động hủy đơn hàng.
+    """
+    success = payment_service.cancel_order(order_id, "Khách hàng chủ động hủy")
+    if not success:
+        raise HTTPException(status_code=404, detail="Order not found")
+    return {"message": "Order cancelled"}
+
 @router.get("/confirm-paid")
 async def confirm_paid(order_id: str = Query(...), secret: str = Query(...)):
     """
@@ -149,7 +159,9 @@ async def telegram_webhook(request: Request):
                 payment_service.telegram.edit_message_text(chat_id, message_id, new_text)
         
         elif action == "cancel_order":
-            new_text = f"{original_text}\n\n❌ <b>TRẠNG THÁI: ĐÃ HỦY ĐƠN</b>"
-            payment_service.telegram.edit_message_text(chat_id, message_id, new_text)
+            success = payment_service.cancel_order(order_id, "Đã hủy bởi Admin (Telegram)")
+            if success:
+                new_text = f"{original_text}\n\n❌ <b>TRẠNG THÁI: ĐÃ HỦY ĐƠN</b>"
+                payment_service.telegram.edit_message_text(chat_id, message_id, new_text)
 
     return {"status": "ok"}

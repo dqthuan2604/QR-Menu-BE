@@ -23,10 +23,11 @@ class TelegramHelper:
             "parse_mode": "HTML"
         }
         try:
-            resp = requests.post(f"{self.base_url}/sendMessage", json=payload)
+            resp = requests.post(f"{self.base_url}/sendMessage", data=payload)
             if resp.status_code == 200:
                 data = resp.json()
                 return data.get("result", {}).get("message_id")
+            logging.error(f"DEBUG: Telegram sendMessage failed: {resp.text}")
             return None
         except Exception as e:
             logging.error(f"DEBUG: Telegram sendMessage error: {e}")
@@ -46,14 +47,16 @@ class TelegramHelper:
             "chat_id": chat_id,
             "text": text,
             "parse_mode": "HTML",
-            "reply_markup": keyboard
+            "reply_markup": json.dumps(keyboard)
         }
         try:
-            resp = requests.post(f"{self.base_url}/sendMessage", json=payload)
+            resp = requests.post(f"{self.base_url}/sendMessage", data=payload)
             if resp.status_code == 200:
                 return resp.json().get("result", {}).get("message_id")
+            logging.error(f"DEBUG: send_cod_notification failed: {resp.text}")
             return None
-        except:
+        except Exception as e:
+            logging.error(f"DEBUG: send_cod_notification error: {e}")
             return None
 
     def send_bank_notification(self, text: str, order_id: str, chat_id: int):
@@ -61,8 +64,8 @@ class TelegramHelper:
         keyboard = {
             "inline_keyboard": [
                 [
-                    {"text": "💰 Đã nhận tiền", "callback_data": f"confirm_paid:{order_id}"},
-                    {"text": "❌ Hủy đơn", "callback_data": f"cancel_order:{order_id}"}
+                    {"text": "✅ Xác nhận thanh toán", "callback_data": f"confirm_paid:{order_id}"},
+                    {"text": "❌ Hủy đơn hàng", "callback_data": f"cancel_order:{order_id}"}
                 ]
             ]
         }
@@ -70,14 +73,16 @@ class TelegramHelper:
             "chat_id": chat_id,
             "text": text,
             "parse_mode": "HTML",
-            "reply_markup": keyboard
+            "reply_markup": json.dumps(keyboard)
         }
         try:
-            resp = requests.post(f"{self.base_url}/sendMessage", json=payload)
+            resp = requests.post(f"{self.base_url}/sendMessage", data=payload)
             if resp.status_code == 200:
                 return resp.json().get("result", {}).get("message_id")
+            logging.error(f"DEBUG: send_bank_notification failed: {resp.text}")
             return None
-        except:
+        except Exception as e:
+            logging.error(f"DEBUG: send_bank_notification error: {e}")
             return None
 
     def send_interactive_message(self, text: str, order_id: str, chat_id: int):
@@ -93,13 +98,17 @@ class TelegramHelper:
             "parse_mode": "HTML"
         }
         if reply_markup is not None:
-            payload["reply_markup"] = reply_markup
+            # Nếu là dict, serialize thành JSON string
+            if isinstance(reply_markup, dict):
+                payload["reply_markup"] = json.dumps(reply_markup)
+            else:
+                payload["reply_markup"] = reply_markup
         else:
             # Nếu muốn xóa bàn phím cũ, gửi inline_keyboard rỗng
-            payload["reply_markup"] = {"inline_keyboard": []}
+            payload["reply_markup"] = json.dumps({"inline_keyboard": []})
 
         try:
-            resp = requests.post(f"{self.base_url}/editMessageText", json=payload)
+            resp = requests.post(f"{self.base_url}/editMessageText", data=payload)
             if resp.status_code != 200:
                 logging.error(f"DEBUG: Telegram editMessageText failed: {resp.text}")
             return resp.status_code == 200
@@ -112,8 +121,8 @@ class TelegramHelper:
         keyboard = {
             "inline_keyboard": [
                 [
-                    {"text": "💰 Đã nhận tiền", "callback_data": f"confirm_paid:{order_id}"},
-                    {"text": "❌ Hủy đơn", "callback_data": f"cancel_order:{order_id}"}
+                    {"text": "✅ Xác nhận thanh toán", "callback_data": f"confirm_paid:{order_id}"},
+                    {"text": "❌ Hủy đơn hàng", "callback_data": f"cancel_order:{order_id}"}
                 ]
             ]
         }

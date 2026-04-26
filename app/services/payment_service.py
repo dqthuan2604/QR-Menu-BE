@@ -85,9 +85,9 @@ class PaymentService:
             chat_id = store_config["telegram_chat_id"]
             # Tạo message với trạng thái "ĐANG CHỜ"
             wait_message = self.telegram.format_bank_transfer_message(order)
-            wait_message = wait_message.replace("🔔 💰 <b>KHÁCH BÁO CHUYỂN KHOẢN</b>", "⏳ <b>ĐƠN ĐANG CHỜ THANH TOÁN</b>")
-            # Gửi tin nhắn thông báo và lưu ID
-            msg_id = self.telegram.send_message(wait_message, chat_id)
+            wait_message = wait_message.replace("🔔 <b>💰 KHÁCH BÁO CHUYỂN KHOẢN</b>", "⏳ <b>ĐƠN ĐANG CHỜ THANH TOÁN</b>")
+            # Gửi tin nhắn thông báo kèm nút bấm và lưu ID
+            msg_id = self.telegram.send_bank_notification(wait_message, order['id'], chat_id)
             if msg_id:
                 self.order_repo.update_status(order['id'], "PENDING", {"telegram_message_id": msg_id})
 
@@ -189,14 +189,46 @@ class PaymentService:
         self.order_repo.update_status(order_id, "PAID", {"confirmed_at": datetime.now()})
         return True, "Success"
 
+    def cancel_order(self, order_id: str, reason: str = "Customer cancelled"):
+        """
+        Hủy đơn hàng và cập nhật tin nhắn Telegram nếu có
+        """
+        order = self.order_repo.get_order(order_id)
+        if not order:
+            return False
+            
+        self.order_repo.update_status(order_id, "CANCELLED", {"cancelled_at": datetime.now(), "cancel_reason": reason})
+        
+        # Cập nhật Telegram
+        store_config = self.store_repo.get_store(order['store_id'])
+        chat_id = store_config.get("telegram_chat_id") if store_config else None
+        msg_id = order.get("telegram_message_id")
+        
+        if chat_id and msg_id:
+            message = self.telegram.format_bank_transfer_message(order)
+            new_text = f"{message}\n\n❌ <b>TRẠNG THÁI: {reason.upper()}</b>"
+            self.telegram.edit_message_text(chat_id, msg_id, new_text)
+            
+        return True
+
     def get_payment_status(self, order_id: str) -> PaymentStatusResponse:
         order = self.order_repo.get_order(order_id)
         if not order:
             return None
             
+        # Kiểm tra tự động hủy nếu hết hạn (Auto-expiration)
+        current_status = order['status']
+        if current_status in ["PENDING", "NOTIFIED"]:
+            expired_at = order.get("expired_at")
+            if expired_at:
+                # Firestore returns datetime objects
+                if datetime.now() > expired_at:
+                    self.cancel_order(order_id, "Hết hạn thanh toán (Auto-expired)")
+                    current_status = "CANCELLED"
+
         return PaymentStatusResponse(
             order_id=order['id'],
-            status=order['status'],
+            status=current_status,
             amount=order['amount'],
             address=order.get('address'),
             phone_number=order.get('phone_number'),
