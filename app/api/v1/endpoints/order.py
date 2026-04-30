@@ -30,7 +30,8 @@ async def validate_delivery(request: DeliveryValidationRequest):
     # 2. Lấy cấu hình bán kính
     # Mặc định R=5km, N=2km nếu không set
     def parse_dist(val, default):
-        if val is None or val == "": return default
+        if val is None or val == "":
+            return default
         try:
             if isinstance(val, str):
                 return float(val.lower().replace("km", "").replace(",", ".").strip())

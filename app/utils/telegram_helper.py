@@ -1,6 +1,5 @@
 import logging
 import requests
-import os
 import json
 from app.core.config import settings
 
@@ -135,7 +134,7 @@ class TelegramHelper:
         }
         try:
             requests.post(f"{self.base_url}/answerCallbackQuery", json=payload)
-        except:
+        except Exception:
             pass
 
     def format_currency(self, amount: float, currency_code: str = "VND"):
@@ -158,7 +157,6 @@ class TelegramHelper:
         currency = order_data.get("currency", "VND")
         items_str = ""
         for item in order_data.get("items", []):
-            price_formatted = self.format_currency(item['price'], currency)
             total_item_price = self.format_currency(item['price'] * item['quantity'], currency)
             items_str += f"• {item['name']} x {item['quantity']}: {total_item_price}\n"
         
@@ -190,7 +188,6 @@ class TelegramHelper:
         currency = order_data.get("currency", "VND")
         items_str = ""
         for item in order_data.get("items", []):
-            price_formatted = self.format_currency(item['price'], currency)
             total_item_price = self.format_currency(item['price'] * item['quantity'], currency)
             items_str += f"• {item['name']} x {item['quantity']}: {total_item_price}\n"
         

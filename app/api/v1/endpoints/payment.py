@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 from app.schemas.payment import (
     PaymentCreateRequest, 
     PaymentCreateResponse, 
@@ -7,7 +7,6 @@ from app.schemas.payment import (
     StoreConfigRequest
 )
 from app.services.payment_service import PaymentService
-import logging
 
 router = APIRouter()
 payment_service = PaymentService()
