@@ -45,6 +45,7 @@ target/
 !firestore.rules
 !storage.rules
 !metadata.json
+!vercel.json
 # Allow standard config files but ignore service accounts specifically if they don't follow a pattern
 *-firebase-adminsdk.json
 serviceAccountKey.json
