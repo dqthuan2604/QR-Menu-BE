@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
     
+    # Geoapify Config
+    geoapify_api_key: str = ""
+    
     model_config = {
         "env_file": ".env.prod" if os.getenv("APP_ENV") == "production" else ".env",
         "extra": "allow"

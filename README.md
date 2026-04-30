@@ -57,3 +57,12 @@ https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook?url=<YOUR_DOMAIN>/api/v1
 - [x] Phase 1: VietQR & COD basic.
 - [x] Phase 2: Interactive Telegram Notification.
 - [ ] Phase 3: Webhook IPN (VNPay callback) & Dashboard quản lý.
+
+## 🛠 CI/CD Pipeline
+
+Dự án đã được tích hợp GitHub Actions để kiểm tra chất lượng code tự động:
+- **Lints**: `ruff check .`
+- **Type Check**: `mypy .`
+- **Tests**: `pytest`
+
+Quy trình CI sẽ tự động chạy khi bạn push code lên GitHub. Bạn cũng có thể chạy các lệnh này cục bộ sau khi cài đặt các thư viện bổ sung trong `requirements.txt`.

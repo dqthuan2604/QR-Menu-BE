@@ -33,3 +33,12 @@ class OrderResponse(BaseModel):
     payment_method: str
     status: str
     created_at: datetime
+
+class DeliveryValidationRequest(BaseModel):
+    store_id: str
+    customer_address: str
+
+class DeliveryValidationResponse(BaseModel):
+    status: Literal["ALLOWED", "WARNING_EXTRA_COST", "REJECTED"]
+    distance_km: Optional[float] = None
+    message: str
