@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     backend_url: str = "http://localhost:8000"
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
+
+    # CORS
+    allowed_origins: str = "http://localhost:3000,http://localhost:5173"
     
     # Geoapify Config
     geoapify_api_key: str = ""
