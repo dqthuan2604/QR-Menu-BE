@@ -27,16 +27,18 @@ def initialize_firebase():
                 logging.info(f"DEBUG: Found credentials file at {path}")
                 cred = credentials.Certificate(path)
             else:
-                logging.warning("⚠️ DEBUG: Firebase credentials not found. Database will be disabled.")
-                return None
+                msg = f"⚠️ DEBUG: Firebase credentials not found at {path} and FIREBASE_SERVICE_ACCOUNT env is missing."
+                logging.error(msg)
+                raise FileNotFoundError(msg)
 
         firebase_admin.initialize_app(cred)
         db = firestore.client()
         logging.info("✅ DEBUG: Firebase initialized successfully.")
         return db
     except Exception as e:
-        logging.error(f"❌ DEBUG: Error initializing Firebase: {e}")
-        return None
+        error_msg = f"❌ DEBUG: Error initializing Firebase: {e}"
+        logging.error(error_msg)
+        raise RuntimeError(error_msg)
 
 def get_db():
     if db is None:
