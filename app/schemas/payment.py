@@ -38,11 +38,11 @@ class PaymentStatusResponse(BaseModel):
 # --- Store & Configuration Schemas ---
 
 class StoreConfigRequest(BaseModel):
-    name: str = Field(..., example="Loco Cafe")
-    bank_code: Optional[str] = Field(None, example="VCB")
-    bank_account: Optional[str] = Field(None, example="123456789")
-    bank_account_name: Optional[str] = Field(None, example="NGUYEN VAN A")
-    telegram_bot_username: Optional[str] = Field(None, example="QR_Menu_Bot")
+    name: str = Field(..., examples=["Loco Cafe"])
+    bank_code: Optional[str] = Field(None, examples=["VCB"])
+    bank_account: Optional[str] = Field(None, examples=["123456789"])
+    bank_account_name: Optional[str] = Field(None, examples=["NGUYEN VAN A"])
+    telegram_bot_username: Optional[str] = Field(None, examples=["QR_Menu_Bot"])
 
 class StoreResponse(BaseModel):
     store_id: str

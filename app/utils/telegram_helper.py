@@ -1,6 +1,7 @@
 import logging
 import requests
 import json
+from typing import Any, Optional
 from app.core.config import settings
 
 class TelegramHelper:
@@ -88,9 +89,9 @@ class TelegramHelper:
         """Mặc định coi là Bank notification nếu gọi hàm chung này"""
         return self.send_bank_notification(text, order_id, chat_id)
 
-    def edit_message_text(self, chat_id: int, message_id: int, text: str, reply_markup: dict = None):
+    def edit_message_text(self, chat_id: int, message_id: int, text: str, reply_markup: Optional[dict[str, Any]] = None):
         """Cập nhật nội dung tin nhắn Telegram."""
-        payload = {
+        payload: dict[str, Any] = {
             "chat_id": chat_id,
             "message_id": message_id,
             "text": text,
@@ -127,7 +128,7 @@ class TelegramHelper:
         }
         return self.edit_message_text(chat_id, message_id, text, reply_markup=keyboard)
 
-    def answer_callback_query(self, callback_query_id: str, text: str = None):
+    def answer_callback_query(self, callback_query_id: str, text: Optional[str] = None):
         payload = {
             "callback_query_id": callback_query_id,
             "text": text

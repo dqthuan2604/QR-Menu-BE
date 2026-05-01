@@ -21,7 +21,7 @@ class GeoService:
         url = "https://api.geoapify.com/v1/geocode/search"
         
         async def _do_geocode(text: str) -> Tuple[Optional[float], Optional[float], str]:
-            params = {
+            params: dict[str, str | int] = {
                 "text": text,
                 "apiKey": settings.geoapify_api_key,
                 "limit": 1
@@ -108,7 +108,7 @@ class GeoService:
             return None
             
         url = "https://api.geoapify.com/v1/routing"
-        params = {
+        params: dict[str, str] = {
             "waypoints": f"{lat1},{lon1}|{lat2},{lon2}",
             "mode": "motorcycle", # Phù hợp cho shipper ở VN
             "apiKey": settings.geoapify_api_key

@@ -1,6 +1,6 @@
 from app.core.firebase import get_db
 from google.cloud.firestore import Client
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, cast
 
 class StoreRepository:
     def __init__(self):
@@ -9,9 +9,9 @@ class StoreRepository:
 
     def get_store(self, store_id: str) -> Optional[Dict[str, Any]]:
         """Lấy thông tin cấu hình của cửa hàng theo ID"""
-        doc = self.db.collection(self.collection).document(store_id).get()
+        doc = cast(Any, self.db.collection(self.collection).document(store_id).get())
         if doc.exists:
-            data = doc.to_dict()
+            data = doc.to_dict() or {}
             data['id'] = doc.id
             return data
         return None
@@ -20,7 +20,7 @@ class StoreRepository:
         """Tìm cửa hàng theo tên định danh Bot đã cấu hình"""
         docs = self.db.collection(self.collection).where("telegram_bot_username", "==", bot_username).limit(1).get()
         for doc in docs:
-            data = doc.to_dict()
+            data = doc.to_dict() or {}
             data['id'] = doc.id
             return data
         return None
@@ -37,9 +37,9 @@ class StoreRepository:
 
     def get_owner_bank_config(self, owner_id: str) -> Optional[Dict[str, Any]]:
         """Lấy cấu hình ngân hàng từ profile của chủ quán"""
-        doc = self.db.collection("users").document(owner_id).get()
+        doc = cast(Any, self.db.collection("users").document(owner_id).get())
         if doc.exists:
-            data = doc.to_dict()
+            data = doc.to_dict() or {}
             return data.get("bank_config")
         return None
 

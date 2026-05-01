@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 import uuid
+from typing import Any, Optional
 from app.core.firebase import get_db
 
 class OrderRepository:
@@ -13,7 +14,7 @@ class OrderRepository:
         # Tên Collection trong Firestore
         self.collection = "orders" if self.db else None
 
-    def create_order(self, amount: int, store_id: str, order_info: str, address: str = None, phone_number: str = None, customer_name: str = None, items: list = None, payment_method: str = "BANK", currency: str = "VND"):
+    def create_order(self, amount: float, store_id: str, order_info: str, address: Optional[str] = None, phone_number: Optional[str] = None, customer_name: Optional[str] = None, items: Optional[list[Any]] = None, payment_method: str = "BANK", currency: str = "VND"):
         """
         Tạo mới một tài liệu (document) đơn hàng trong Firestore.
         """
@@ -79,7 +80,7 @@ class OrderRepository:
         doc = self.db.collection(self.collection).document(order_id).get()
         return doc.to_dict() if doc.exists else None
 
-    def update_status(self, order_id: str, status: str, updated_fields: dict = None):
+    def update_status(self, order_id: str, status: str, updated_fields: Optional[dict[str, Any]] = None):
         """
         Cập nhật trạng thái và các trường dữ liệu bổ sung của đơn hàng.
         - status: PENDING, NOTIFIED, PAID.

@@ -1,5 +1,6 @@
 # Danh sách các ngân hàng phổ biến để Mapping từ UI
 # Anh có thể mở rộng danh sách này dựa trên VietQR API
+from typing import Optional
 
 SUPPORTED_BANKS = {
     "VCB": {"bin": "970436", "name": "Vietcombank"},
@@ -14,7 +15,7 @@ SUPPORTED_BANKS = {
     "VPBANK": {"bin": "970432", "name": "VPBank"},
 }
 
-def get_bank_bin(bank_code: str) -> str:
+def get_bank_bin(bank_code: str) -> Optional[str]:
     """Trả về BIN dựa trên mã ngân hàng (VCB, MB...)"""
     bank = SUPPORTED_BANKS.get(bank_code.upper())
     return bank["bin"] if bank else None

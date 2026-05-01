@@ -5,6 +5,7 @@ from app.utils.vietqr_helper import generate_vietqr_image_url, generate_vietqr_t
 from app.repositories.order_repo import OrderRepository
 from app.repositories.store_repo import store_repo
 from app.core.bank_constants import get_bank_bin
+from typing import Optional
 from app.schemas.payment import PaymentCreateResponse, PaymentStatusResponse, PaymentCreateRequest
 from app.utils.telegram_helper import TelegramHelper
 
@@ -64,10 +65,11 @@ class PaymentService:
         transfer_content = f"CK {order['id']}"
         
         # 3. Tạo QR dựa trên thông tin thực của cửa hàng
+        qr_amount = int(request.amount)
         qr_image_url = generate_vietqr_image_url(
             bank_bin=bank_bin,
             account_no=bank_account,
-            amount=request.amount,
+            amount=qr_amount,
             content=transfer_content,
             account_name=bank_account_name
         )
@@ -75,7 +77,7 @@ class PaymentService:
         qr_data = generate_vietqr_text(
             bank_bin=bank_bin,
             account_no=bank_account,
-            amount=request.amount,
+            amount=qr_amount,
             content=transfer_content
         )
         
@@ -211,7 +213,7 @@ class PaymentService:
             
         return True
 
-    def get_payment_status(self, order_id: str) -> PaymentStatusResponse:
+    def get_payment_status(self, order_id: str) -> Optional[PaymentStatusResponse]:
         order = self.order_repo.get_order(order_id)
         if not order:
             return None
