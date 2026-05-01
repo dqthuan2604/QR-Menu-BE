@@ -84,6 +84,3 @@ Thumbs.db
 # --- Agents & Scratch ---
 .agents/
 scratch/
-
-# --- testing ---
-tests/
