@@ -1,4 +1,5 @@
-from fastapi import APIRouter, HTTPException
+from app.core.limiter import limiter
+from fastapi import APIRouter, HTTPException, Request
 from app.schemas.order import OrderCreateRequest, OrderResponse, DeliveryValidationRequest, DeliveryValidationResponse
 from app.services.order_service import OrderService
 from app.services.geo_service import GeoService
@@ -8,22 +9,24 @@ router = APIRouter()
 order_service = OrderService()
 
 @router.post("", response_model=OrderResponse)
-async def create_order(request: OrderCreateRequest):
+@limiter.limit("25/minute") # rare limit
+async def create_order(payload: OrderCreateRequest, request: Request):
     """
     Tạo đơn hàng mới (Chỉ hỗ trợ COD).
     """
     try:
-        return order_service.create_order(request)
+        return order_service.create_order(payload)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/validate-delivery", response_model=DeliveryValidationResponse)
-async def validate_delivery(request: DeliveryValidationRequest):
+@limiter.limit("60/minute")
+async def validate_delivery(payload: DeliveryValidationRequest, request: Request):
     """
     Kiểm tra khoảng cách giao hàng và trả về trạng thái (ALLOWED, WARNING, REJECTED).
     """
     # 1. Lấy thông tin cửa hàng
-    store = store_repo.get_store(request.store_id)
+    store = store_repo.get_store(payload.store_id)
     if not store:
         raise HTTPException(status_code=404, detail="Không tìm thấy cửa hàng.")
     
@@ -65,7 +68,7 @@ async def validate_delivery(request: DeliveryValidationRequest):
         store_lat, store_lon = coords
 
     # 4. Geocode địa chỉ khách hàng
-    customer_coords = await GeoService.geocode(request.customer_address)
+    customer_coords = await GeoService.geocode(payload.customer_address)
     if not customer_coords:
         return DeliveryValidationResponse(
             status="REJECTED",
@@ -86,13 +89,13 @@ async def validate_delivery(request: DeliveryValidationRequest):
         return DeliveryValidationResponse(
             status="ALLOWED",
             distance_km=distance,
-            message="Bạn nằm trong vùng giao hàng của quán."
+            message="Đơn hàng sẵn sàng giao đến bạn"
         )
     elif distance <= (r + n):
         return DeliveryValidationResponse(
             status="WARNING_EXTRA_COST",
             distance_km=distance,
-            message=f"Vị trí của bạn hơi xa ({distance} km), phí giao hàng có thể cao hơn bình thường."
+            message=f"Vị trí của bạn hơi xa ({distance} km), phí giao hàng sẽ cao hơn bình thường."
         )
     else:
         return DeliveryValidationResponse(
@@ -102,7 +105,8 @@ async def validate_delivery(request: DeliveryValidationRequest):
         )
 
 @router.get("/geocode", response_model=dict)
-async def geocode_address(address: str):
+@limiter.limit("60/minute")
+async def geocode_address(address: str, request: Request):
     """
     Proxy cho Geoapify Geocoding để bảo mật API Key.
     """

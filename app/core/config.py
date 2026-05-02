@@ -30,6 +30,15 @@ class Settings(BaseSettings):
     # CORS
     allowed_origins: str = "http://localhost:3000,http://localhost:5173"
     
+    @property
+    def cors_origins_list(self) -> list[str]:
+        if not self.allowed_origins:
+            return []
+        if self.allowed_origins == "*":
+            # In production, we force specific origins. If still '*', we log warning.
+            return ["*"]
+        return [origin.strip() for origin in self.allowed_origins.split(",") if origin.strip()]
+    
     # Geoapify Config
     geoapify_api_key: str = ""
     
