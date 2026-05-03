@@ -10,5 +10,8 @@
       "source": "/(.*)",
       "destination": "/app/main.py"
     }
-  ]
+  ],
+  "github": {
+    "silent": true
+  }
 }

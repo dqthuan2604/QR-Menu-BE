@@ -9,6 +9,7 @@ requests>=2.31.0
 types-requests>=2.31.0
 gunicorn>=21.2.0
 slowapi>=0.1.9
+aiofiles>=23.2.1
 
 # CI/CD tools
 ruff>=0.3.0

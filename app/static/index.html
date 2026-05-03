@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR-Menu Payment Service</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 800px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 2.5rem;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.2rem;
+        }
+        
+        .status {
+            background: #10b981;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            display: inline-block;
+            margin-bottom: 30px;
+            font-weight: 600;
+        }
+        
+        .features {
+            margin: 30px 0;
+        }
+        
+        .feature {
+            padding: 15px;
+            margin-bottom: 10px;
+            background: #f9fafb;
+            border-radius: 10px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .feature h3 {
+            color: #333;
+            margin-bottom: 5px;
+        }
+        
+        .feature p {
+            color: #666;
+            line-height: 1.6;
+        }
+        
+        .links {
+            margin-top: 30px;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: transform 0.2s, box-shadow 0.2s;
+            display: inline-block;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+        
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+        
+        .btn-secondary {
+            background: #f3f4f6;
+            color: #333;
+        }
+        
+        .footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #e5e7eb;
+            text-align: center;
+            color: #666;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🍽️ QR-Menu Payment Service</h1>
+        <p class="subtitle">Backend service cho thanh toán VietQR</p>
+        
+        <div class="status">✓ Service is running</div>
+        
+        <div class="features">
+            <div class="feature">
+                <h3>🔗 VietQR Payment</h3>
+                <p>Tích hợp VNPAY để tạo link thanh toán VietQR nhanh chóng và an toàn.</p>
+            </div>
+            
+            <div class="feature">
+                <h3>💵 COD Ordering System</h3>
+                <p>Hệ thống đặt hàng nhận tiền mặt (Cash On Delivery) cho menu QR.</p>
+            </div>
+            
+            <div class="feature">
+                <h3>🤖 Interactive Telegram Bot</h3>
+                <p>Nhận thông báo đơn hàng tức thì và quản lý đơn hàng trực tiếp qua Telegram với nút bấm tương tác.</p>
+            </div>
+        </div>
+        
+        <div class="links">
+            <a href="/docs" class="btn btn-primary">📚 API Documentation</a>
+            <a href="/health" class="btn btn-secondary">🏥 Health Check</a>
+            <a href="/api/v1" class="btn btn-secondary">🔌 API v1</a>
+        </div>
+        
+        <div class="footer">
+            <p>Powered by FastAPI • Version 1.0.0</p>
+            <p>Built with ❤️ for QR-Menu</p>
+        </div>
+    </div>
+    
+    <!-- Vercel Web Analytics -->
+    <script>
+        window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+    </script>
+    <script defer src="/_vercel/insights/script.js"></script>
+</body>
+</html>
