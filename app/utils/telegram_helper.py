@@ -1,12 +1,12 @@
-import logging
-import requests
+import asyncio
 import json
+import logging
 from typing import Any, Optional
 from app.core.config import settings
 
 class TelegramHelper:
     """
-    Công cụ hỗ trợ giao tiếp với Telegram Bot API.
+    Công cụ hỗ trợ giao tiếp với Telegram Bot API (async).
     Hỗ trợ gửi tin nhắn tương tác với Nút bấm (Inline Buttons).
     """
     def __init__(self):
@@ -15,25 +15,31 @@ class TelegramHelper:
         self.base_url = f"https://api.telegram.org/bot{self.token}"
         logging.info(f"DEBUG: TelegramHelper initialized with token: {str(self.token)[:10]}... (len: {len(str(self.token))})")
 
-    def send_message(self, text: str, chat_id: int):
+    async def _post(self, endpoint: str, data: dict) -> dict:
+        """Gửi POST request async qua httpx."""
+        import httpx
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.post(f"{self.base_url}/{endpoint}", data=data)
+                if resp.status_code == 200:
+                    return resp.json()
+                logging.error(f"DEBUG: Telegram {endpoint} failed: {resp.text}")
+                return {}
+        except Exception as e:
+            logging.error(f"DEBUG: Telegram {endpoint} error: {e}")
+            return {}
+
+    async def send_message(self, text: str, chat_id: int) -> Optional[int]:
         """Gửi tin nhắn văn bản thông thường. Trả về message_id nếu thành công."""
         payload = {
             "chat_id": chat_id,
             "text": text,
             "parse_mode": "HTML"
         }
-        try:
-            resp = requests.post(f"{self.base_url}/sendMessage", data=payload)
-            if resp.status_code == 200:
-                data = resp.json()
-                return data.get("result", {}).get("message_id")
-            logging.error(f"DEBUG: Telegram sendMessage failed: {resp.text}")
-            return None
-        except Exception as e:
-            logging.error(f"DEBUG: Telegram sendMessage error: {e}")
-            return None
+        data = await self._post("sendMessage", payload)
+        return data.get("result", {}).get("message_id")
 
-    def send_cod_notification(self, text: str, order_id: str, chat_id: int):
+    async def send_cod_notification(self, text: str, order_id: str, chat_id: int) -> Optional[int]:
         """Gửi thông báo đơn hàng COD kèm nút Xác nhận đơn hàng"""
         keyboard = {
             "inline_keyboard": [
@@ -49,17 +55,10 @@ class TelegramHelper:
             "parse_mode": "HTML",
             "reply_markup": json.dumps(keyboard)
         }
-        try:
-            resp = requests.post(f"{self.base_url}/sendMessage", data=payload)
-            if resp.status_code == 200:
-                return resp.json().get("result", {}).get("message_id")
-            logging.error(f"DEBUG: send_cod_notification failed: {resp.text}")
-            return None
-        except Exception as e:
-            logging.error(f"DEBUG: send_cod_notification error: {e}")
-            return None
+        data = await self._post("sendMessage", payload)
+        return data.get("result", {}).get("message_id")
 
-    def send_bank_notification(self, text: str, order_id: str, chat_id: int):
+    async def send_bank_notification(self, text: str, order_id: str, chat_id: int) -> Optional[int]:
         """Gửi thông báo đơn hàng BANK kèm nút Xác nhận đã nhận tiền"""
         keyboard = {
             "inline_keyboard": [
@@ -75,21 +74,14 @@ class TelegramHelper:
             "parse_mode": "HTML",
             "reply_markup": json.dumps(keyboard)
         }
-        try:
-            resp = requests.post(f"{self.base_url}/sendMessage", data=payload)
-            if resp.status_code == 200:
-                return resp.json().get("result", {}).get("message_id")
-            logging.error(f"DEBUG: send_bank_notification failed: {resp.text}")
-            return None
-        except Exception as e:
-            logging.error(f"DEBUG: send_bank_notification error: {e}")
-            return None
+        data = await self._post("sendMessage", payload)
+        return data.get("result", {}).get("message_id")
 
-    def send_interactive_message(self, text: str, order_id: str, chat_id: int):
+    async def send_interactive_message(self, text: str, order_id: str, chat_id: int) -> Optional[int]:
         """Mặc định coi là Bank notification nếu gọi hàm chung này"""
-        return self.send_bank_notification(text, order_id, chat_id)
+        return await self.send_bank_notification(text, order_id, chat_id)
 
-    def edit_message_text(self, chat_id: int, message_id: int, text: str, reply_markup: Optional[dict[str, Any]] = None):
+    async def edit_message_text(self, chat_id: int, message_id: int, text: str, reply_markup: Optional[dict[str, Any]] = None) -> bool:
         """Cập nhật nội dung tin nhắn Telegram."""
         payload: dict[str, Any] = {
             "chat_id": chat_id,
@@ -98,25 +90,17 @@ class TelegramHelper:
             "parse_mode": "HTML"
         }
         if reply_markup is not None:
-            # Nếu là dict, serialize thành JSON string
             if isinstance(reply_markup, dict):
                 payload["reply_markup"] = json.dumps(reply_markup)
             else:
                 payload["reply_markup"] = reply_markup
         else:
-            # Nếu muốn xóa bàn phím cũ, gửi inline_keyboard rỗng
             payload["reply_markup"] = json.dumps({"inline_keyboard": []})
 
-        try:
-            resp = requests.post(f"{self.base_url}/editMessageText", data=payload)
-            if resp.status_code != 200:
-                logging.error(f"DEBUG: Telegram editMessageText failed: {resp.text}")
-            return resp.status_code == 200
-        except Exception as e:
-            logging.error(f"DEBUG: Telegram editMessageText error: {e}")
-            return False
+        data = await self._post("editMessageText", payload)
+        return data.get("ok", False) if data else False
 
-    def edit_bank_notification(self, chat_id: int, message_id: int, text: str, order_id: str):
+    async def edit_bank_notification(self, chat_id: int, message_id: int, text: str, order_id: str) -> bool:
         """Cập nhật tin nhắn BANK và hiển thị nút Xác nhận đã nhận tiền"""
         keyboard = {
             "inline_keyboard": [
@@ -126,28 +110,22 @@ class TelegramHelper:
                 ]
             ]
         }
-        return self.edit_message_text(chat_id, message_id, text, reply_markup=keyboard)
+        return await self.edit_message_text(chat_id, message_id, text, reply_markup=keyboard)
 
-    def answer_callback_query(self, callback_query_id: str, text: Optional[str] = None):
+    async def answer_callback_query(self, callback_query_id: str, text: Optional[str] = None) -> None:
         payload = {
             "callback_query_id": callback_query_id,
             "text": text
         }
-        try:
-            requests.post(f"{self.base_url}/answerCallbackQuery", json=payload)
-        except Exception:
-            pass
+        await self._post("answerCallbackQuery", payload)
 
     def format_currency(self, amount: float, currency_code: str = "VND"):
         """Định dạng tiền tệ theo mã (VND, USD, EUR)"""
         if currency_code == "VND":
-            # 2.000đ
             return f"{amount:,.0f}".replace(",", ".") + "đ"
         elif currency_code == "USD":
-            # $2,000.00
             return f"${amount:,.2f}"
         elif currency_code == "EUR":
-            # 2.000,00 €
             formatted = f"{amount:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
             return f"{formatted} €"
         else:
@@ -160,13 +138,13 @@ class TelegramHelper:
         for item in order_data.get("items", []):
             total_item_price = self.format_currency(item['price'] * item['quantity'], currency)
             items_str += f"• {item['name']} x {item['quantity']}: {total_item_price}\n"
-        
+
         customer_name = order_data.get('customer_name', 'Khách vãng lai')
         phone = order_data.get('phone_number', 'N/A')
         address = order_data.get('address', 'N/A')
         total_amount = order_data.get('total_amount', order_data.get('amount', 0))
         total_formatted = self.format_currency(total_amount, currency)
-        
+
         message = (
             f"🔔 <b>🚚 ĐƠN HÀNG COD MỚI</b>\n\n"
             f"👤 <b>Khách:</b> {customer_name}\n"
@@ -191,13 +169,13 @@ class TelegramHelper:
         for item in order_data.get("items", []):
             total_item_price = self.format_currency(item['price'] * item['quantity'], currency)
             items_str += f"• {item['name']} x {item['quantity']}: {total_item_price}\n"
-        
+
         customer_name = order_data.get('customer_name', 'Khách vãng lai')
         phone = order_data.get('phone_number', 'N/A')
         address = order_data.get('address', 'N/A')
         total_amount = order_data.get('amount', order_data.get('total_amount', 0))
         total_formatted = self.format_currency(total_amount, currency)
-        
+
         message = (
             f"🔔 <b>💰 KHÁCH BÁO CHUYỂN KHOẢN</b>\n\n"
             f"👤 <b>Khách:</b> {customer_name}\n"

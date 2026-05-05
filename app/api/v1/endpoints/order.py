@@ -1,9 +1,20 @@
+from fastapi import APIRouter, HTTPException, Query, Request
 from app.core.limiter import limiter
-from fastapi import APIRouter, HTTPException, Request
-from app.schemas.order import OrderCreateRequest, OrderResponse, DeliveryValidationRequest, DeliveryValidationResponse
+from app.schemas.order import (
+    OrderCreateRequest, 
+    OrderResponse, 
+    DeliveryValidationRequest, 
+    DeliveryValidationResponse,
+    OrderDetailResponse,
+    OrderListResponse,
+    OrderStatusUpdateRequest,
+    PaymentReconciliationRequest,
+    PaymentReconciliationResponse
+)
 from app.services.order_service import OrderService
 from app.services.geo_service import GeoService
 from app.repositories.store_repo import store_repo
+from typing import Optional
 
 router = APIRouter()
 order_service = OrderService()
@@ -114,3 +125,115 @@ async def geocode_address(address: str, request: Request):
     if not coords:
         raise HTTPException(status_code=400, detail="Không thể tìm thấy địa chỉ.")
     return {"lat": coords[0], "lng": coords[1]}
+
+@router.get("", response_model=OrderListResponse)
+@limiter.limit("30/minute")
+async def get_orders(
+    store_id: str = Query(...),
+    status: Optional[str] = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    search: Optional[str] = Query(None),
+    sort_by: Optional[str] = Query("created_at"),
+    sort_order: Optional[str] = Query("desc"),
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
+    request: Request = None
+):
+    """
+    Lấy danh sách đơn hàng của cửa hàng với filter, search, sort và pagination.
+    """
+    try:
+        result = order_service.get_orders(
+            store_id=store_id,
+            status=status,
+            page=page,
+            page_size=page_size,
+            search=search,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            date_from=date_from,
+            date_to=date_to
+        )
+        return OrderListResponse(**result)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/{order_id}", response_model=OrderDetailResponse)
+@limiter.limit("30/minute")
+async def get_order_detail(order_id: str, request: Request = None):
+    """
+    Lấy chi tiết một đơn hàng.
+    """
+    try:
+        order = order_service.order_repo.get_order(order_id)
+        if not order:
+            raise HTTPException(status_code=404, detail="Không tìm thấy đơn hàng")
+        
+        return OrderDetailResponse(
+            order_id=order.get("order_id", order.get("id", order_id)),
+            store_id=order["store_id"],
+            customer_name=order["customer_name"],
+            phone_number=order["phone_number"],
+            address=order["address"],
+            order_info=order.get("order_info"),
+            items=order["items"],
+            total_amount=order["total_amount"],
+            currency=order.get("currency", "VND"),
+            payment_method=order["payment_method"],
+            status=order["status"],
+            created_at=order["created_at"],
+            telegram_message_id=str(order["telegram_message_id"]) if order.get("telegram_message_id") is not None else None
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.put("/{order_id}/status", response_model=dict)
+@limiter.limit("20/minute")
+async def update_order_status(
+    order_id: str,
+    payload: OrderStatusUpdateRequest,
+    request: Request = None
+):
+    """
+    Cập nhật trạng thái đơn hàng.
+    """
+    try:
+        result = await order_service.update_order_status(
+            order_id=order_id,
+            status=payload.status
+        )
+        if not result.get("success"):
+            raise HTTPException(status_code=404, detail=result.get("error"))
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/{order_id}/verify-payment", response_model=PaymentReconciliationResponse)
+@limiter.limit("20/minute")
+async def verify_payment(
+    order_id: str,
+    payload: PaymentReconciliationRequest,
+    request: Request = None
+):
+    """
+    Đối soát thông tin thanh toán.
+    """
+    try:
+        result = order_service.verify_payment(
+            order_id=order_id,
+            amount_paid=payload.amount_paid
+        )
+        
+        return PaymentReconciliationResponse(
+            order_id=result["order_id"],
+            status="PAID" if result["matched"] else "PENDING",
+            matched=result["matched"],
+            message=result.get("message", "")
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

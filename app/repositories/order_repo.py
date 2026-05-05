@@ -78,7 +78,16 @@ class OrderRepository:
         if not self.db:
             return None
         doc = self.db.collection(self.collection).document(order_id).get()
-        return doc.to_dict() if doc.exists else None
+        if not doc.exists:
+            return None
+        data = doc.to_dict()
+        if "id" in data:
+            data["order_id"] = data.pop("id")
+        else:
+            data["order_id"] = doc.id
+        if "amount" in data and "total_amount" not in data:
+            data["total_amount"] = data.pop("amount")
+        return data
 
     def update_status(self, order_id: str, status: str, updated_fields: Optional[dict[str, Any]] = None):
         """
@@ -97,3 +106,91 @@ class OrderRepository:
         # Sử dụng update() để chỉ ghi đè các trường chỉ định, giữ nguyên các trường cũ
         self.db.collection(self.collection).document(order_id).update(data)
         return True
+
+    def get_orders_by_store(
+        self,
+        store_id: str,
+        status: Optional[str] = None,
+        limit: int = 20,
+        offset: int = 0,
+        search: Optional[str] = None,
+        sort_by: Optional[str] = "created_at",
+        sort_order: Optional[str] = "desc",
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None
+    ) -> tuple[list[dict[str, Any]], int]:
+        """
+        Lấy danh sách đơn hàng của cửa hàng với filter, search, sort và pagination.
+        Returns: (orders, total_count)
+        """
+        if not self.db:
+            return [], 0
+
+        # Lấy tất cả đơn hàng của store (và filter status nếu có)
+        query = self.db.collection(self.collection).where("store_id", "==", store_id)
+
+        if status:
+            query = query.where("status", "==", status)
+
+        docs = query.stream()
+        all_orders = []
+        for doc in docs:
+            data = doc.to_dict()
+            # Map field `id` -> `order_id`
+            if "id" in data:
+                data["order_id"] = data.pop("id")
+            else:
+                data["order_id"] = doc.id
+            # Map field `amount` -> `total_amount` (cho bank orders)
+            if "amount" in data and "total_amount" not in data:
+                data["total_amount"] = data.pop("amount")
+            all_orders.append(data)
+
+        # Filter theo search (order_id, customer_name, phone_number)
+        if search:
+            search_lower = search.lower()
+            filtered_orders = []
+            for order in all_orders:
+                if (
+                    search_lower in str(order.get("order_id", "")).lower()
+                    or search_lower in str(order.get("customer_name", "")).lower()
+                    or search_lower in str(order.get("phone_number", "")).lower()
+                ):
+                    filtered_orders.append(order)
+            all_orders = filtered_orders
+
+        # Filter theo date range
+        if date_from:
+            try:
+                from datetime import datetime
+                date_from_dt = datetime.fromisoformat(date_from)
+                all_orders = [o for o in all_orders if o.get("created_at") and o["created_at"] >= date_from_dt]
+            except (ValueError, TypeError):
+                pass
+
+        if date_to:
+            try:
+                from datetime import datetime, timedelta
+                date_to_dt = datetime.fromisoformat(date_to) + timedelta(days=1)
+                all_orders = [o for o in all_orders if o.get("created_at") and o["created_at"] < date_to_dt]
+            except (ValueError, TypeError):
+                pass
+
+        # Sort
+        reverse = (sort_order == "desc")
+        if sort_by == "total_amount":
+            all_orders.sort(key=lambda x: float(x.get("total_amount", 0) or 0), reverse=reverse)
+        elif sort_by == "status":
+            all_orders.sort(key=lambda x: str(x.get("status", "")), reverse=reverse)
+        elif sort_by == "customer_name":
+            all_orders.sort(key=lambda x: str(x.get("customer_name", "")).lower(), reverse=reverse)
+        else:  # default: created_at
+            all_orders.sort(key=lambda x: x.get("created_at") or datetime.min, reverse=reverse)
+
+        # Tổng số sau filter
+        total_count = len(all_orders)
+
+        # Pagination
+        paginated = all_orders[offset:offset + limit]
+
+        return paginated, total_count

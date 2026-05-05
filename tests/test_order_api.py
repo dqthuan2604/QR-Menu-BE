@@ -180,3 +180,157 @@ def test_geocode_endpoint_returns_400_when_address_not_found(monkeypatch):
 
     assert response.status_code == 400
 
+
+def test_get_orders_returns_list(monkeypatch):
+    mock_orders = [
+        {"order_id": "ORD1", "store_id": "store123", "customer_name": "John", "phone_number": "0123", "status": "PENDING", "total_amount": 50000.0, "created_at": "2024-01-01T00:00:00"},
+        {"order_id": "ORD2", "store_id": "store123", "customer_name": "Jane", "phone_number": "0456", "status": "CONFIRMED", "total_amount": 75000.0, "created_at": "2024-01-02T00:00:00"}
+    ]
+
+    def fake_get_orders(store_id, status=None, page=1, page_size=20):
+        return {"total": 2, "page": 1, "page_size": 20, "total_pages": 1, "orders": mock_orders}
+
+    monkeypatch.setattr(order_endpoint.order_service, "get_orders", fake_get_orders)
+
+    response = client.get("/api/v1/orders", params={"store_id": "store123"})
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 2
+    assert data["page"] == 1
+    assert len(data["orders"]) == 2
+
+
+def test_get_orders_with_status_filter(monkeypatch):
+    mock_orders = [
+        {"order_id": "ORD1", "store_id": "store123", "customer_name": "John", "phone_number": "0123", "status": "PENDING", "total_amount": 50000.0, "created_at": "2024-01-01T00:00:00"}
+    ]
+
+    def fake_get_orders(store_id, status=None, page=1, page_size=20):
+        return {"total": 1, "page": 1, "page_size": 20, "total_pages": 1, "orders": mock_orders}
+
+    monkeypatch.setattr(order_endpoint.order_service, "get_orders", fake_get_orders)
+
+    response = client.get("/api/v1/orders", params={"store_id": "store123", "status": "PENDING"})
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 1
+    assert data["orders"][0]["status"] == "PENDING"
+
+
+def test_get_order_detail_success(monkeypatch):
+    mock_order = {
+        "id": "ORD1",
+        "store_id": "store123",
+        "customer_name": "John Doe",
+        "phone_number": "0123456789",
+        "address": "123 Street",
+        "order_info": "",
+        "items": [{"item_id": "1", "name": "Coffee", "quantity": 2, "price": 30000}],
+        "total_amount": 60000,
+        "currency": "VND",
+        "payment_method": "COD",
+        "status": "PENDING",
+        "created_at": "2024-01-01T00:00:00"
+    }
+
+    monkeypatch.setattr(order_endpoint.order_service.order_repo, "get_order", lambda x: mock_order)
+
+    response = client.get("/api/v1/orders/ORD1")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["order_id"] == "ORD1"
+    assert data["customer_name"] == "John Doe"
+    assert data["status"] == "PENDING"
+
+
+def test_get_order_detail_not_found(monkeypatch):
+    monkeypatch.setattr(order_endpoint.order_service.order_repo, "get_order", lambda x: None)
+
+    response = client.get("/api/v1/orders/ORD999")
+
+    assert response.status_code == 404
+
+
+def test_update_order_status_success(monkeypatch):
+    monkeypatch.setattr(
+        order_endpoint.order_service,
+        "update_order_status",
+        lambda order_id, status: {"success": True, "order_id": order_id, "status": status}
+    )
+
+    response = client.put(
+        "/api/v1/orders/ORD1/status",
+        json={"status": "CONFIRMED"}
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is True
+    assert data["status"] == "CONFIRMED"
+
+
+def test_update_order_status_not_found(monkeypatch):
+    monkeypatch.setattr(
+        order_endpoint.order_service,
+        "update_order_status",
+        lambda order_id, status: {"success": False, "error": "Order not found"}
+    )
+
+    response = client.put(
+        "/api/v1/orders/ORD999/status",
+        json={"status": "CONFIRMED"}
+    )
+
+    assert response.status_code == 404
+
+
+def test_verify_payment_success(monkeypatch):
+    monkeypatch.setattr(
+        order_endpoint.order_service,
+        "verify_payment",
+        lambda order_id, amount_paid: {
+            "matched": True,
+            "order_id": order_id,
+            "expected_amount": 100000,
+            "paid_amount": amount_paid,
+            "message": "Payment verified successfully"
+        }
+    )
+
+    response = client.post(
+        "/api/v1/orders/ORD1/verify-payment",
+        json={"order_id": "ORD1", "amount_paid": 100000.0}
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["matched"] is True
+    assert data["status"] == "PAID"
+
+
+def test_verify_payment_mismatch(monkeypatch):
+    monkeypatch.setattr(
+        order_endpoint.order_service,
+        "verify_payment",
+        lambda order_id, amount_paid: {
+            "matched": False,
+            "order_id": order_id,
+            "expected_amount": 100000,
+            "paid_amount": amount_paid,
+            "message": f"Amount mismatch: expected 100000, got {amount_paid}"
+        }
+    )
+
+    response = client.post(
+        "/api/v1/orders/ORD1/verify-payment",
+        json={"order_id": "ORD1", "amount_paid": 90000.0}
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["matched"] is False
+    assert data["status"] == "PENDING"
+

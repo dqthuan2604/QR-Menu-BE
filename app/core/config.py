@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     telegram_chat_id: str = ""
 
     # CORS
-    allowed_origins: str = "http://localhost:3000,http://localhost:5173"
+    allowed_origins: str = "*"  # Cho phép tất cả trong môi trường development/ngrok
     
     @property
     def cors_origins_list(self) -> list[str]:
